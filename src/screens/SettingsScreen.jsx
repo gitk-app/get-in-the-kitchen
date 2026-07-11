@@ -29,6 +29,7 @@ export default function SettingsScreen({ store }) {
         <span className="screen-title">Settings</span>
       </div>
       <div className="screen-padded">
+        <div className="settings-grid">
 
         {/* Budget */}
         <div className="card mb-16">
@@ -97,6 +98,7 @@ export default function SettingsScreen({ store }) {
             </div>
           )}
         </div>
+        </div>{/* end settings-grid */}
 
         <Divider />
         <p className="text-xs text-muted" style={{ textAlign: 'center' }}>GET IN THE KITCHEN · v1.0 MVP<br />Real meals. Real budget. Real life.</p>
