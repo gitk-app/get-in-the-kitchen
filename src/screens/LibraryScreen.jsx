@@ -3,7 +3,7 @@ import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../co
 import { MEAL_SLOTS } from '../data/meals';
 
 export default function LibraryScreen({ store }) {
-  const { meals, addMeal, removeMeal, updateMeal, toggleFavorite, apiFetch } = store;
+  const { meals, addMeal, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals } = store;
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [recipeView, setRecipeView] = useState(null);
@@ -29,11 +29,12 @@ export default function LibraryScreen({ store }) {
     if (!name.trim()) return;
     const items = ingredients ? ingredients.split(',').map(x => ({ n: x.trim(), s: 'Aldi' })).filter(x => x.n) : [];
     const stepList = steps ? steps.split('\n').map(x => x.trim()).filter(Boolean) : [];
-    const nm = { name: name.trim(), slot, cost: parseFloat(cost) || 0, protein: 'none', items, steps: stepList, prepTime: 0, favorite: false };
-    addMeal(nm);
+    const newId = 'm' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const nm = { id: newId, name: name.trim(), slot, cost: parseFloat(cost) || 0, protein: 'none', items, steps: stepList, prepTime: 0, favorite: false };
+    // Add directly via setMeals so ID is known before generateSteps runs
+    store.setMeals(prev => [...prev, nm]);
     if (!stepList.length) {
-      const id = 'm' + Date.now();
-      generateSteps(id, name.trim(), slot);
+      generateSteps(newId, name.trim(), slot);
     }
     setName(''); setCost(''); setIngredients(''); setSteps(''); setAdding(false);
   };

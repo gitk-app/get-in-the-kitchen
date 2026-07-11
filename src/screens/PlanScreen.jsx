@@ -10,13 +10,13 @@ const getWeekStart = (w) => {
 };
 const formatRange = (w) => {
   const s = getWeekStart(w), e = new Date(s); e.setDate(s.getDate() + 6);
-  const o = { month: 'short', day: 'numeric' };
-  return s.toLocaleDateString('en-US', o) + ' – ' + e.toLocaleDateString('en-US', o);
+  const o = { month: 'short', day: 'numeric', year: 'numeric' };
+  return s.toLocaleDateString('en-US', o) + ' – ' + e.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
 export default function PlanScreen({ store }) {
-  const { meals, currentPlan, activeWeek, setActiveWeek, setMealInPlan, clearWeek,
+  const { meals, currentPlan, activeWeek, setActiveWeek, setMealInPlan, setBulkPlan, clearWeek,
     planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal } = store;
 
   const [picker, setPicker] = useState(null);
@@ -66,11 +66,13 @@ export default function PlanScreen({ store }) {
   };
 
   const applyAiPick = (day, slot, pick) => {
-    const newMeal = { id: 'm' + Date.now(), name: pick.name, slot, cost: pick.cost || 0, protein: pick.protein || 'none', items: [], steps: [], prepTime: 20, favorite: false };
-    addMeal(newMeal);
-    setMealInPlan(day, slot, newMeal.id);
+    const newId = 'm' + Date.now() + '-pick-' + Math.random().toString(36).slice(2, 6);
+    const newMeal = { id: newId, name: pick.name, slot, cost: pick.cost || 0, protein: pick.protein || 'none', items: [], steps: [], prepTime: 20, favorite: false };
+    // Add meal and assign to plan in one synchronous sequence
+    store.setMeals(prev => [...prev, newMeal]);
+    setMealInPlan(day, slot, newId);
     setPicker(null);
-    generateSteps(newMeal.id, pick.name, slot);
+    generateSteps(newId, pick.name, slot);
   };
 
   const generateSteps = async (id, name, slot) => {
@@ -85,34 +87,51 @@ export default function PlanScreen({ store }) {
   const buildWeek = async () => {
     setBuilding(true);
     const pList = pantry.map(p => p.qty ? p.name + ' (' + p.qty + ')' : p.name);
-    const myMeals = meals.map(m => `${m.name} (${m.slot}, $${m.cost.toFixed(2)})`).join('; ');
+    const currentMeals = store.mealsRef.current;
+    const myMeals = currentMeals.map(m => `${m.name} (${m.slot}, $${m.cost.toFixed(2)})`).join('; ');
     const proteins = wizardProteins.length ? wizardProteins.join(', ') : 'any';
     const prompt = `Build a 7-day meal plan (Sunday-Saturday) with Breakfast, Lunch, Dinner. Budget $${budget}/week. Proteins: ${proteins}. Rotate so same protein isn't dinner 3 nights in a row. Leftovers for next-day lunch: ${wizardLeftovers} nights. ${wizardLocked ? 'Locked: ' + wizardLocked + '.' : ''} ${pList.length ? 'On hand: ' + pList.join(', ') + '.' : ''} Prefer from my library: ${myMeals}. Set isNew:true for meals NOT in my library. JSON only: {"Sunday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Monday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Tuesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Wednesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Thursday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Friday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Saturday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}}}`;
     try {
       const text = await apiFetch(prompt, 1400);
       const weekPlan = JSON.parse(text);
-      const newMealsToGenerate = [];
+
+      // Build all new meals first, collect them
+      const newMealRecords = [];
+      const newPlan = {};
+
       DAYS.forEach(day => {
+        newPlan[day] = {};
         PLAN_SLOTS.forEach(slot => {
           const entry = weekPlan[day]?.[slot];
           const name = typeof entry === 'string' ? entry : entry?.name || '';
           if (!name) return;
-          let match = meals.find(m => m.name.toLowerCase() === name.toLowerCase() && m.slot === slot);
-          if (!match) match = meals.find(m => m.name.toLowerCase().includes(name.toLowerCase().split(' ')[0]) && m.slot === slot);
+          // Check library using ref (always fresh)
+          const lib = store.mealsRef.current;
+          let match = lib.find(m => m.name.toLowerCase() === name.toLowerCase() && m.slot === slot);
+          if (!match) match = lib.find(m => m.name.toLowerCase().includes(name.toLowerCase().split(' ')[0]) && m.slot === slot);
           if (match) {
-            setMealInPlan(day, slot, match.id);
+            newPlan[day][slot] = match.id;
           } else {
-            const nm = { id: 'm' + Date.now() + day + slot, name, slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 20, favorite: false };
-            addMeal(nm);
-            setMealInPlan(day, slot, nm.id);
-            newMealsToGenerate.push(nm);
+            const newId = 'm' + Date.now() + '-' + day + '-' + slot + '-' + Math.random().toString(36).slice(2, 6);
+            const nm = { id: newId, name, slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 20, favorite: false };
+            newMealRecords.push(nm);
+            newPlan[day][slot] = newId;
           }
         });
       });
+
+      // Add ALL new meals to library at once, then set the plan at once
+      if (newMealRecords.length > 0) {
+        store.setMeals(prev => [...prev, ...newMealRecords]);
+      }
+      store.setBulkPlan(newPlan);
+
       setWizard(false);
       setBuilding(false);
-      newMealsToGenerate.forEach(m => generateSteps(m.id, m.name, m.slot));
-    } catch {
+
+      // Generate steps in background for new meals
+      newMealRecords.forEach(m => generateSteps(m.id, m.name, m.slot));
+    } catch (e) {
       setBuilding(false);
       alert('Could not build the week. Check your API key and try again.');
     }
