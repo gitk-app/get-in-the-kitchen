@@ -65,7 +65,7 @@ export default function PlanScreen({ store }) {
     } catch { setAiPicks(p => ({ ...p, [key]: [] })); }
   };
 
-  const useAiPick = (day, slot, pick) => {
+  const applyAiPick = (day, slot, pick) => {
     const newMeal = { id: 'm' + Date.now(), name: pick.name, slot, cost: pick.cost || 0, protein: pick.protein || 'none', items: [], steps: [], prepTime: 20, favorite: false };
     addMeal(newMeal);
     setMealInPlan(day, slot, newMeal.id);
@@ -262,7 +262,7 @@ export default function PlanScreen({ store }) {
             ) : (
               <div className="pill-group mb-12">
                 {pickerAiPicks.map(p => (
-                  <Pill key={p.id} onClick={() => useAiPick(picker.day, picker.slot, p)}>
+                  <Pill key={p.id} onClick={() => applyAiPick(picker.day, picker.slot, p)}>
                     {p.name} · ~${(p.cost || 0).toFixed(2)}
                   </Pill>
                 ))}
