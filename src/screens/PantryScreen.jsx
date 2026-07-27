@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
+
+// Lazy load scanner so zxing only loads when needed
+const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'));
 
 const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
@@ -13,11 +16,25 @@ export default function PantryScreen({ store }) {
   const [fresh, setFresh] = useState(false);
   const [restockId, setRestockId] = useState(null);
   const [restockQty, setRestockQty] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState('');
 
   const handleAdd = () => {
     if (!name.trim()) return;
     addPantryItem({ name: name.trim(), qty: qty.trim(), category, fresh });
-    setName(''); setQty('');
+    setName(''); setQty(''); setScanFeedback('');
+  };
+
+  const handleScanResult = ({ barcode, name: foundName, category: foundCategory, found }) => {
+    setScanning(false);
+    if (found && foundName) {
+      setName(foundName);
+      setCategory(foundCategory || 'Pantry Staples');
+      setScanFeedback('✓ Found: ' + foundName);
+    } else {
+      // Product not in database — let them type the name manually
+      setScanFeedback('Barcode ' + barcode + ' not found in database — enter name manually');
+    }
   };
 
   const freshUrgent = pantry.filter(p => p.fresh).map(p => ({ ...p, age: daysOld(p.addedAt) })).filter(p => p.age >= 2);
@@ -38,16 +55,61 @@ export default function PantryScreen({ store }) {
 
   return (
     <div className="screen">
+      {/* Barcode scanner fullscreen overlay */}
+      {scanning && (
+        <Suspense fallback={null}>
+          <BarcodeScanner
+            onResult={handleScanResult}
+            onClose={() => setScanning(false)}
+          />
+        </Suspense>
+      )}
+
       <div className="screen-header">
         <span className="screen-title">Pantry</span>
         <span className="text-sm text-muted">{pantry.length} items</span>
       </div>
+
       <div className="screen-padded">
         {/* Add form */}
         <div className="card mb-12">
+          {/* Scan button — prominent at top */}
+          <button
+            onClick={() => { setScanFeedback(''); setScanning(true); }}
+            style={{
+              width: '100%', padding: '13px', borderRadius: 10, marginBottom: 12,
+              background: 'var(--green)', color: '#fff', border: 'none',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+            }}>
+            <Icon name="scan" size={18} /> Scan barcode
+          </button>
+
+          {/* Scan feedback */}
+          {scanFeedback && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: 13,
+              background: scanFeedback.startsWith('✓') ? 'var(--green-light)' : 'var(--warning-light)',
+              color: scanFeedback.startsWith('✓') ? '#166534' : '#92400e'
+            }}>
+              {scanFeedback}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={{ flex: 1, height: 0.5, background: 'var(--border)' }} />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>or add manually</span>
+            <div style={{ flex: 1, height: 0.5, background: 'var(--border)' }} />
+          </div>
+
           <div className="form-group">
             <label>Item name</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Chicken thighs" onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Chicken thighs"
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }} className="mb-8">
             <div>
@@ -67,7 +129,7 @@ export default function PantryScreen({ store }) {
               <div style={{ width: 20, height: 20, borderRadius: 6, border: fresh ? 'none' : '1.5px solid var(--border)', background: fresh ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {fresh && <Icon name="check" size={12} style={{ color: '#fff' }} />}
               </div>
-              Fresh item (track freshness)
+              Track freshness (for perishables)
             </button>
           </div>
           <Button variant="primary" onClick={handleAdd}>
@@ -110,7 +172,11 @@ export default function PantryScreen({ store }) {
 
         {/* Empty state */}
         {pantry.length === 0 && (
-          <EmptyState icon="fridge" title="Your pantry is empty" body="Add what you have on hand and we'll suggest meals you can make right now." />
+          <EmptyState
+            icon="fridge"
+            title="Your pantry is empty"
+            body="Scan a barcode or type an item above to get started."
+          />
         )}
 
         {/* Grouped pantry items */}
@@ -134,7 +200,10 @@ export default function PantryScreen({ store }) {
                     </div>
                     <div className="flex gap-8 items-center">
                       {item.fresh && (
-                        <Button variant="ghost" size="sm" onClick={() => { setRestockId(isRestocking ? null : item.id); setRestockQty(item.qty || ''); }}>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          setRestockId(isRestocking ? null : item.id);
+                          setRestockQty(item.qty || '');
+                        }}>
                           {isRestocking ? 'Cancel' : 'Restock'}
                         </Button>
                       )}
