@@ -128,13 +128,20 @@ export default function PantryScreen({ store }) {
     setName(''); setQty(''); setScanFeedback('');
   };
 
+  const [scanResult, setScanResult] = useState(null); // holds scanned item for quick-add confirmation
+
   const handleScanResult = ({ barcode, name: foundName, category: foundCategory, found }) => {
     setScanning(false);
     if (found && foundName) {
-      setName(foundName);
-      setCategory(foundCategory || 'Pantry Staples');
-      setScanFeedback('✓ Found: ' + foundName);
+      // Show quick-add sheet with name pre-filled, ask for quantity
+      setScanResult({
+        name: foundName,
+        category: foundCategory || 'Pantry Staples',
+        qty: '',
+        type: 'shelf',
+      });
     } else {
+      // Not found — fall back to manual form
       setScanFeedback('Barcode ' + barcode + ' not found — enter name manually');
     }
   };
@@ -180,6 +187,96 @@ export default function PantryScreen({ store }) {
           onSave={handleSaveEdit}
           onClose={() => setEditItem(null)}
         />
+      )}
+
+      {/* Quick-add sheet after successful scan */}
+      {scanResult && (
+        <>
+          <div onClick={() => setScanResult(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+            width: '100%', maxWidth: 640, background: 'var(--bg-white)',
+            borderRadius: '20px 20px 0 0', zIndex: 201,
+            display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ width: 40, height: 4, background: 'var(--border-strong)', borderRadius: 2, margin: '12px auto 0' }} />
+            <div style={{ padding: '12px 16px 10px', borderBottom: '0.5px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 700 }}>Add to pantry</span>
+                <button onClick={() => setScanResult(null)} style={{ background: 'var(--surface)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>✕</button>
+              </div>
+            </div>
+            <div style={{ padding: '16px 16px 32px' }}>
+              {/* Item name — editable in case scan was slightly off */}
+              <div className="form-group">
+                <label>Item</label>
+                <input
+                  value={scanResult.name}
+                  onChange={e => setScanResult(r => ({ ...r, name: e.target.value }))}
+                />
+              </div>
+
+              {/* Quantity — the main focus here */}
+              <div className="form-group">
+                <label>How much do you have?</label>
+                <input
+                  value={scanResult.qty}
+                  onChange={e => setScanResult(r => ({ ...r, qty: e.target.value }))}
+                  placeholder="e.g. 2 cans, 1 bag, 3 lbs, 6 count"
+                  autoFocus
+                />
+              </div>
+
+              {/* Category */}
+              <div className="form-group">
+                <label>Category</label>
+                <select value={scanResult.category} onChange={e => setScanResult(r => ({ ...r, category: e.target.value }))}>
+                  {PANTRY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              {/* Storage type */}
+              <div className="mb-12">
+                <label>Storage type</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  {TYPE_OPTIONS.map(opt => (
+                    <div key={opt.value} onClick={() => setScanResult(r => ({ ...r, type: opt.value }))}
+                      style={{
+                        flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                        border: scanResult.type === opt.value ? '2px solid var(--green)' : '1px solid var(--border)',
+                        background: scanResult.type === opt.value ? 'var(--green-light)' : 'var(--bg-white)',
+                        fontSize: 12, fontWeight: scanResult.type === opt.value ? 600 : 400,
+                        color: scanResult.type === opt.value ? 'var(--green)' : 'var(--text-secondary)'
+                      }}>
+                      {opt.value === 'fresh' ? '🥬 Fresh' : opt.value === 'frozen' ? '❄️ Frozen' : '🥫 Shelf'}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button variant="primary" onClick={() => {
+                if (!scanResult.name.trim()) return;
+                addPantryItem({
+                  name: scanResult.name.trim(),
+                  qty: scanResult.qty.trim(),
+                  category: scanResult.category,
+                  type: scanResult.type,
+                  fresh: scanResult.type === 'fresh',
+                });
+                setScanResult(null);
+                setScanFeedback('✓ Added: ' + scanResult.name.trim());
+              }}>
+                <Icon name="plus" size={16} /> Add to pantry
+              </Button>
+
+              <button
+                onClick={() => setScanResult(null)}
+                style={{ width: '100%', marginTop: 8, padding: '10px', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       <div className="screen-header">
