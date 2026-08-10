@@ -27,7 +27,14 @@ export default function GroceryScreen({ store }) {
   const [prices, setPrices] = useState({});
   const [storeOverrides, setStoreOverrides] = useState({});
   const [editingStore, setEditingStore] = useState(null);
-  const [extras, setExtras] = useState([]);
+  const [extras, setExtras] = useState(() => {
+    // Load any items added from the meal library pantry cross-check
+    try {
+      const pending = JSON.parse(localStorage.getItem('gitk_grocery_extras') || '[]');
+      if (pending.length) localStorage.removeItem('gitk_grocery_extras');
+      return pending;
+    } catch { return []; }
+  });
   const [extraName, setExtraName] = useState('');
   const [extraStore, setExtraStore] = useState('');
   const [addingExtra, setAddingExtra] = useState(false);
