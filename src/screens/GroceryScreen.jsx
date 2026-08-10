@@ -25,6 +25,8 @@ export default function GroceryScreen({ store }) {
 
   const [checked, setChecked] = useState({});
   const [prices, setPrices] = useState({});
+  const [storeOverrides, setStoreOverrides] = useState({});
+  const [editingStore, setEditingStore] = useState(null);
   const [extras, setExtras] = useState([]);
   const [extraName, setExtraName] = useState('');
   const [extraStore, setExtraStore] = useState('');
@@ -72,16 +74,17 @@ export default function GroceryScreen({ store }) {
     ...extras,
   ], [planItems, lowPantryItems, extras]);
 
-  // Group by store
+  // Group by store — respects overrides
   const byStore = useMemo(() => {
     const groups = {};
     allItems.forEach((item, idx) => {
-      const s = item.store || 'Other';
+      const key = item.source + '|' + idx + '|' + item.name;
+      const s = storeOverrides[key] || item.store || 'Other';
       if (!groups[s]) groups[s] = [];
       groups[s].push({ ...item, idx });
     });
     return groups;
-  }, [allItems]);
+  }, [allItems, storeOverrides]);
 
   const userStores = prefs?.stores?.length ? prefs.stores : Object.keys(byStore);
   const storesWithItems = Object.keys(byStore).filter(s => byStore[s].length > 0);
@@ -119,66 +122,109 @@ export default function GroceryScreen({ store }) {
   const renderItem = (item, idx) => {
     const key = item.source + '|' + idx + '|' + item.name;
     const isChecked = checked[key];
-    const storeColor = getStoreColor(item.store || 'Other');
+    const currentStore = storeOverrides[key] || item.store || 'Other';
+    const storeColor = getStoreColor(currentStore);
+    const isEditingThisStore = editingStore === key;
 
     return (
       <div key={key} style={{
-        display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 0', borderBottom: '0.5px solid var(--border)',
         opacity: isChecked ? 0.45 : 1, transition: 'opacity .2s'
       }}>
-        {/* Checkbox */}
-        <div onClick={() => toggleCheck(key)} style={{
-          width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer',
-          border: isChecked ? 'none' : '1.5px solid var(--border)',
-          background: isChecked ? 'var(--green)' : 'transparent',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-          {isChecked && <Icon name="check" size={13} style={{ color: '#fff' }} />}
-        </div>
-
-        {/* Item name + store tag */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 14, fontWeight: 500,
-            textDecoration: isChecked ? 'line-through' : 'none',
-            color: isChecked ? 'var(--text-muted)' : 'var(--text)'
-          }}>{item.name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-            {item.store && item.store !== 'Any' && (
-              <span style={{
-                fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                background: storeColor.bg, color: storeColor.label,
-                border: '0.5px solid ' + storeColor.border, fontWeight: 600
-              }}>{item.store}</span>
-            )}
-            {item.source === 'pantry' && (
-              <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Running low</span>
-            )}
-            {item.qty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.qty}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Checkbox */}
+          <div onClick={() => toggleCheck(key)} style={{
+            width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer',
+            border: isChecked ? 'none' : '1.5px solid var(--border)',
+            background: isChecked ? 'var(--green)' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            {isChecked && <Icon name="check" size={13} style={{ color: '#fff' }} />}
           </div>
-        </div>
 
-        {/* Price input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>$</span>
-          <input
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            value={prices[key] || ''}
-            onChange={e => setPrice(key, e.target.value)}
-            style={{ width: 64, height: 32, fontSize: 13, textAlign: 'right', padding: '4px 8px' }}
-          />
-        </div>
+          {/* Name + store tag */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 14, fontWeight: 500,
+              textDecoration: isChecked ? 'line-through' : 'none',
+              color: isChecked ? 'var(--text-muted)' : 'var(--text)'
+            }}>{item.name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+              {/* Tappable store tag */}
+              {currentStore && currentStore !== 'Any' && (
+                <span
+                  onClick={() => setEditingStore(isEditingThisStore ? null : key)}
+                  style={{
+                    fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                    background: storeColor.bg, color: storeColor.label,
+                    border: '0.5px solid ' + storeColor.border,
+                    fontWeight: 600, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 3
+                  }}>
+                  {currentStore} <span style={{ fontSize: 9, opacity: 0.7 }}>▼</span>
+                </span>
+              )}
+              {item.source === 'pantry' && (
+                <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Running low</span>
+              )}
+              {item.qty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.qty}</span>}
+            </div>
 
-        {/* Remove button for extras */}
-        {item.source === 'extra' && (
-          <button onClick={() => removeExtra(item.id)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, flexShrink: 0 }}>
-            <Icon name="x" size={14} />
-          </button>
-        )}
+            {/* Inline store picker dropdown */}
+            {isEditingThisStore && (
+              <div style={{
+                marginTop: 6, background: 'var(--bg-white)',
+                border: '1px solid var(--border)', borderRadius: 8,
+                overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
+                display: 'inline-block', minWidth: 160, zIndex: 10, position: 'relative'
+              }}>
+                {(prefs?.stores || []).concat(['Other']).map(s => {
+                  const sc = getStoreColor(s);
+                  const isSelected = currentStore === s;
+                  return (
+                    <div key={s} onClick={() => {
+                      setStoreOverrides(prev => ({ ...prev, [key]: s }));
+                      setEditingStore(null);
+                    }} style={{
+                      padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                      background: isSelected ? sc.bg : 'transparent',
+                      color: isSelected ? sc.label : 'var(--text)',
+                      fontWeight: isSelected ? 600 : 400,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      borderBottom: '0.5px solid var(--border)'
+                    }}>
+                      {s}
+                      {isSelected && <Icon name="check" size={13} style={{ color: sc.label }} />}
+                    </div>
+                  );
+                })}
+                <div onClick={() => setEditingStore(null)} style={{
+                  padding: '7px 12px', cursor: 'pointer', fontSize: 12,
+                  color: 'var(--text-muted)', textAlign: 'center'
+                }}>Cancel</div>
+              </div>
+            )}
+          </div>
+
+          {/* Price input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>$</span>
+            <input
+              type="number" step="0.01" placeholder="0.00"
+              value={prices[key] || ''}
+              onChange={e => setPrice(key, e.target.value)}
+              style={{ width: 64, height: 32, fontSize: 13, textAlign: 'right', padding: '4px 8px' }}
+            />
+          </div>
+
+          {/* Remove for extras */}
+          {item.source === 'extra' && (
+            <button onClick={() => removeExtra(item.id)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, flexShrink: 0 }}>
+              <Icon name="x" size={14} />
+            </button>
+          )}
+        </div>
       </div>
     );
   };
