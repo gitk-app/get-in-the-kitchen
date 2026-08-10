@@ -4,11 +4,13 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import PlanScreen from './screens/PlanScreen';
 import PantryScreen from './screens/PantryScreen';
 import LibraryScreen from './screens/LibraryScreen';
+import GroceryScreen from './screens/GroceryScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import './index.css';
 
 const NAV_ITEMS = [
   { id: 'plan', label: 'Plan', icon: 'calendar' },
+  { id: 'grocery', label: 'Grocery', icon: 'shopping-cart' },
   { id: 'pantry', label: 'Pantry', icon: 'fridge' },
   { id: 'library', label: 'Library', icon: 'book' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
@@ -28,6 +30,7 @@ export default function App() {
 
   const screens = {
     plan: <PlanScreen store={store} />,
+    grocery: <GroceryScreen store={store} />,
     pantry: <PantryScreen store={store} />,
     library: <LibraryScreen store={store} />,
     settings: <SettingsScreen store={store} />,
@@ -35,7 +38,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {/* Desktop sidebar nav */}
+      {/* Desktop sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="sidebar-logo-mark">
