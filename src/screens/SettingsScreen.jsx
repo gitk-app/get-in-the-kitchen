@@ -7,6 +7,7 @@ export default function SettingsScreen({ store }) {
   const [showApiKey, setShowApiKey] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [keySaved, setKeySaved] = useState(false);
+  const [newStore, setNewStore] = useState('');
 
   const saveKey = () => {
     if (!newKey.trim().startsWith('sk-ant-')) { alert("That doesn't look like an Anthropic API key. It should start with sk-ant-"); return; }
@@ -16,12 +17,34 @@ export default function SettingsScreen({ store }) {
     setTimeout(() => setKeySaved(false), 2000);
   };
 
-  const toggleStore = (store) => {
+  const toggleStore = (s) => {
     setPrefs(p => ({
       ...p,
-      stores: p.stores.includes(store) ? p.stores.filter(s => s !== store) : [...p.stores, store]
+      stores: p.stores.includes(s) ? p.stores.filter(x => x !== s) : [...p.stores, s]
     }));
   };
+
+  const addCustomStore = () => {
+    if (!newStore.trim()) return;
+    const name = newStore.trim();
+    setPrefs(p => ({
+      ...p,
+      stores: p.stores.includes(name) ? p.stores : [...p.stores, name],
+      customStores: [...(p.customStores || []), name]
+    }));
+    setNewStore('');
+  };
+
+  const removeCustomStore = (name) => {
+    setPrefs(p => ({
+      ...p,
+      stores: p.stores.filter(s => s !== name),
+      customStores: (p.customStores || []).filter(s => s !== name)
+    }));
+  };
+
+  // All stores = preset + custom
+  const allStores = [...STORES, ...(prefs?.customStores || []).filter(s => !STORES.includes(s))];
 
   return (
     <div className="screen">
@@ -45,16 +68,38 @@ export default function SettingsScreen({ store }) {
         {/* Stores */}
         <div className="card mb-16">
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Your stores</div>
-          <p className="text-sm mb-12">Used to route your grocery list.</p>
-          {STORES.map(s => (
+          <p className="text-sm mb-12">Toggle on the stores you shop at. Add custom stores below.</p>
+          {allStores.map(s => (
             <div key={s} className="flex justify-between items-center" style={{ padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
-              <span style={{ fontSize: 14 }}>{s}</span>
+              <div className="flex items-center gap-8">
+                <span style={{ fontSize: 14 }}>{s}</span>
+                {(prefs?.customStores || []).includes(s) && (
+                  <button onClick={() => removeCustomStore(s)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}>
+                    <Icon name="x" size={13} />
+                  </button>
+                )}
+              </div>
               <button onClick={() => toggleStore(s)}
                 style={{ width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: prefs.stores.includes(s) ? 'var(--green)' : 'var(--border-strong)', transition: 'background .2s' }}>
                 <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, transition: 'left .2s', left: prefs.stores.includes(s) ? 21 : 3 }} />
               </button>
             </div>
           ))}
+          {/* Add custom store */}
+          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+            <input
+              value={newStore}
+              onChange={e => setNewStore(e.target.value)}
+              placeholder="Add a store (e.g. Farmer's Market)"
+              onKeyDown={e => e.key === 'Enter' && addCustomStore()}
+              style={{ flex: 1, height: 36, fontSize: 13 }}
+            />
+            <button onClick={addCustomStore} style={{
+              background: 'var(--green)', color: '#fff', border: 'none',
+              borderRadius: 8, padding: '0 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer'
+            }}>Add</button>
+          </div>
         </div>
 
         {/* Household */}

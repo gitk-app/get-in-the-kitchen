@@ -170,14 +170,9 @@ export default function GroceryScreen({ store }) {
               {item.qty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.qty}</span>}
             </div>
 
-            {/* Inline store picker dropdown */}
+            {/* Inline store picker — pills */}
             {isEditingThisStore && (
-              <div style={{
-                marginTop: 6, background: 'var(--bg-white)',
-                border: '1px solid var(--border)', borderRadius: 8,
-                overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
-                display: 'inline-block', minWidth: 160, zIndex: 10, position: 'relative'
-              }}>
+              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {(prefs?.stores || []).concat(['Other']).map(s => {
                   const sc = getStoreColor(s);
                   const isSelected = currentStore === s;
@@ -186,21 +181,20 @@ export default function GroceryScreen({ store }) {
                       setStoreOverrides(prev => ({ ...prev, [key]: s }));
                       setEditingStore(null);
                     }} style={{
-                      padding: '8px 12px', cursor: 'pointer', fontSize: 13,
-                      background: isSelected ? sc.bg : 'transparent',
-                      color: isSelected ? sc.label : 'var(--text)',
-                      fontWeight: isSelected ? 600 : 400,
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      borderBottom: '0.5px solid var(--border)'
+                      padding: '6px 12px', borderRadius: 20, cursor: 'pointer',
+                      fontSize: 12, fontWeight: isSelected ? 700 : 400,
+                      border: '1.5px solid ' + (isSelected ? sc.label : sc.border),
+                      background: isSelected ? sc.bg : 'var(--bg-white)',
+                      color: isSelected ? sc.label : 'var(--text-secondary)',
+                      transition: 'all .15s'
                     }}>
                       {s}
-                      {isSelected && <Icon name="check" size={13} style={{ color: sc.label }} />}
                     </div>
                   );
                 })}
                 <div onClick={() => setEditingStore(null)} style={{
-                  padding: '7px 12px', cursor: 'pointer', fontSize: 12,
-                  color: 'var(--text-muted)', textAlign: 'center'
+                  padding: '6px 12px', borderRadius: 20, cursor: 'pointer',
+                  fontSize: 12, color: 'var(--text-muted)', border: '1.5px solid var(--border)'
                 }}>Cancel</div>
               </div>
             )}
@@ -346,13 +340,27 @@ export default function GroceryScreen({ store }) {
                       onKeyDown={e => e.key === 'Enter' && addExtra()}
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Store</label>
-                    <select value={extraStore} onChange={e => setExtraStore(e.target.value)}>
-                      <option value="">Select a store</option>
-                      {(prefs?.stores || []).map(s => <option key={s} value={s}>{s}</option>)}
-                      <option value="Other">Other</option>
-                    </select>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Store <span style={{ fontWeight: 400 }}>(optional — can add later)</span></label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(prefs?.stores || []).concat(['Other']).map(s => {
+                        const sc = getStoreColor(s);
+                        const isSelected = extraStore === s;
+                        return (
+                          <div key={s} onClick={() => setExtraStore(isSelected ? '' : s)}
+                            style={{
+                              padding: '6px 12px', borderRadius: 20, cursor: 'pointer',
+                              fontSize: 12, fontWeight: isSelected ? 700 : 400,
+                              border: '1.5px solid ' + (isSelected ? sc.label : sc.border),
+                              background: isSelected ? sc.bg : 'var(--bg-white)',
+                              color: isSelected ? sc.label : 'var(--text-secondary)',
+                              transition: 'all .15s'
+                            }}>
+                            {s}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <Button variant="primary" onClick={addExtra} style={{ flex: 1 }}>Add</Button>
