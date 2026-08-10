@@ -300,15 +300,12 @@ export default function GroceryScreen({ store }) {
                       onKeyDown={e => e.key === 'Enter' && addExtra()}
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <input
-                      value={extraStore}
-                      onChange={e => setExtraStore(e.target.value)}
-                      placeholder="Store (optional)"
-                    />
+                  <div className="form-group">
+                    <label>Store</label>
                     <select value={extraStore} onChange={e => setExtraStore(e.target.value)}>
-                      <option value="">Pick store</option>
+                      <option value="">Select a store</option>
                       {(prefs?.stores || []).map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value="Other">Other</option>
                     </select>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -332,11 +329,12 @@ export default function GroceryScreen({ store }) {
         {/* BY STORE VIEW */}
         {view === 'by-store' && (
           <div>
-            {/* Store tabs */}
+            {/* Store tabs — show all saved stores */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-              {storesWithItems.map(s => {
+              {(prefs?.stores?.length ? prefs.stores : storesWithItems).map(s => {
                 const color = getStoreColor(s);
                 const isActive = activeStore === s;
+                const count = byStore[s]?.length || 0;
                 return (
                   <button key={s} onClick={() => setActiveStore(s)} style={{
                     padding: '7px 14px', borderRadius: 20, border: '1.5px solid',
@@ -345,14 +343,14 @@ export default function GroceryScreen({ store }) {
                     color: isActive ? color.label : 'var(--text-secondary)',
                     fontSize: 13, fontWeight: isActive ? 700 : 400, cursor: 'pointer'
                   }}>
-                    {s} ({byStore[s]?.length || 0})
+                    {s} {count > 0 ? `(${count})` : ''}
                   </button>
                 );
               })}
             </div>
 
             {/* Items for active store */}
-            {activeStore && byStore[activeStore] && (
+            {activeStore && byStore[activeStore]?.length > 0 && (
               <div>
                 <div style={{
                   padding: '10px 14px', borderRadius: 10, marginBottom: 12,
@@ -363,16 +361,25 @@ export default function GroceryScreen({ store }) {
                     {activeStore}
                   </div>
                   <div style={{ fontSize: 12, color: getStoreColor(activeStore).label, opacity: 0.8, marginTop: 2 }}>
-                    {byStore[activeStore].filter((_, i) => checked[byStore[activeStore][i]?.source + '|' + i + '|' + byStore[activeStore][i]?.name]).length} of {byStore[activeStore].length} items checked
+                    {byStore[activeStore].length} item{byStore[activeStore].length !== 1 ? 's' : ''}
                   </div>
                 </div>
                 {byStore[activeStore].map((item, idx) => renderItem(item, item.idx !== undefined ? item.idx : idx))}
               </div>
             )}
 
-            {storesWithItems.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                No items yet — add meals to your weekly plan first.
+            {/* Empty store */}
+            {activeStore && (!byStore[activeStore] || byStore[activeStore].length === 0) && (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>🛒</div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Nothing from {activeStore} this week</div>
+                <div style={{ fontSize: 13 }}>Add an extra item above and assign it to {activeStore}.</div>
+              </div>
+            )}
+
+            {!activeStore && (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                Tap a store above to see its items.
               </div>
             )}
           </div>
