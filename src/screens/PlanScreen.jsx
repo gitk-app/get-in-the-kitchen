@@ -17,15 +17,18 @@ const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
 export default function PlanScreen({ store }) {
   const { meals, currentPlan, activeWeek, setActiveWeek, setMealInPlan, setBulkPlan, clearWeek,
-    planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal } = store;
+    planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal, prefs } = store;
 
   const [picker, setPicker] = useState(null);
   const [browseAll, setBrowseAll] = useState(false);
+  const [manualEntry, setManualEntry] = useState('');
+  const [showManualEntry, setShowManualEntry] = useState(false);
   const [recipeView, setRecipeView] = useState(null);
   const [wizard, setWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
-  const [wizardProteins, setWizardProteins] = useState([]);
+  const [wizardProteins, setWizardProteins] = useState(() => prefs?.proteins || []);
   const [wizardLeftovers, setWizardLeftovers] = useState('1-2');
+  const [wizardBusyNights, setWizardBusyNights] = useState('Tuesday, Wednesday, Thursday, Friday');
   const [wizardLocked, setWizardLocked] = useState('');
   const [building, setBuilding] = useState(false);
   const [aiPicks, setAiPicks] = useState({});
@@ -90,7 +93,27 @@ export default function PlanScreen({ store }) {
     const currentMeals = store.mealsRef.current;
     const myMeals = currentMeals.map(m => `${m.name} (${m.slot}, $${m.cost.toFixed(2)})`).join('; ');
     const proteins = wizardProteins.length ? wizardProteins.join(', ') : 'any';
-    const prompt = `Build a 7-day meal plan (Sunday-Saturday) with Breakfast, Lunch, Dinner. Budget $${budget}/week. Proteins: ${proteins}. Rotate so same protein isn't dinner 3 nights in a row. Leftovers for next-day lunch: ${wizardLeftovers} nights. ${wizardLocked ? 'Locked: ' + wizardLocked + '.' : ''} ${pList.length ? 'On hand: ' + pList.join(', ') + '.' : ''} Prefer from my library: ${myMeals}. Set isNew:true for meals NOT in my library. JSON only: {"Sunday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Monday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Tuesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Wednesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Thursday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Friday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Saturday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}}}`;
+    const weekType = prefs?.weekType || 'normal';
+    const busyNights = wizardBusyNights;
+
+    const prompt = `Build a realistic 7-day meal plan (Sunday-Saturday) for a working single mom. Budget $${budget}/week.
+
+CRITICAL RULES — follow these strictly:
+- ALL meals must be simple, practical, everyday home cooking. NO gourmet, restaurant-style, or chef-level meals.
+- Breakfast: quick options only — eggs, oatmeal, yogurt, toast, cereal, smoothies. Max 15 minutes.
+- Lunch: simple leftovers, sandwiches, wraps, salads, or soup. Max 10 minutes to assemble.
+- Dinner on BUSY nights (${busyNights}): MUST be 20 minutes or less, OR slow cooker set in morning, OR planned leftovers from previous night. No complex cooking on busy nights.
+- Dinner on other nights: still keep it simple — one-pan meals, casseroles, basic proteins with sides. Max 30-40 minutes.
+- Week type is "${weekType}" — ${weekType === 'busy' || weekType === 'chaotic' ? 'make almost everything quick and simple, prioritize leftovers and slow cooker meals' : weekType === 'relaxed' ? 'can include slightly more involved meals on weekends' : 'balance quick weeknight meals with slightly more effort on weekends'}.
+- Proteins to rotate: ${proteins}. Never the same protein at dinner more than 2 nights in a row.
+- Leftovers strategy: ${wizardLeftovers} nights where dinner leftovers cover next day lunch.
+- ${wizardLocked ? 'Already locked in: ' + wizardLocked + '.' : ''}
+- ${pList.length ? 'Use what I have on hand: ' + pList.join(', ') + '.' : ''}
+- Strongly prefer meals from my saved library: ${myMeals || 'none saved yet'}.
+- For new meals, keep names simple and descriptive — "Baked chicken thighs with rice" not "Herb-crusted pan-seared chicken".
+
+Set isNew:true for meals NOT in my saved library.
+JSON only, no preamble: {"Sunday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Monday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Tuesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Wednesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Thursday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Friday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Saturday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}}}`;
     try {
       const text = await apiFetch(prompt, 1400);
       const weekPlan = JSON.parse(text);
@@ -280,6 +303,47 @@ export default function PlanScreen({ store }) {
                 </Button>
               </div>
             )}
+
+            {/* Manual entry */}
+            <div style={{ marginBottom: 14 }}>
+              {!showManualEntry ? (
+                <button onClick={() => setShowManualEntry(true)}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px dashed var(--border)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="pencil" size={14} /> Type a meal name manually…
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={manualEntry}
+                    onChange={e => setManualEntry(e.target.value)}
+                    placeholder="e.g. Leftovers, Cereal, Frozen pizza"
+                    autoFocus
+                    style={{ flex: 1, height: 40, fontSize: 14 }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && manualEntry.trim()) {
+                        const newId = 'm' + Date.now() + '-manual';
+                        const nm = { id: newId, name: manualEntry.trim(), slot: picker.slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 0, favorite: false };
+                        store.setMeals(prev => [...prev, nm]);
+                        setMealInPlan(picker.day, picker.slot, newId);
+                        setManualEntry(''); setShowManualEntry(false); setPicker(null);
+                      }
+                    }}
+                  />
+                  <button onClick={() => {
+                    if (!manualEntry.trim()) { setShowManualEntry(false); return; }
+                    const newId = 'm' + Date.now() + '-manual';
+                    const nm = { id: newId, name: manualEntry.trim(), slot: picker.slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 0, favorite: false };
+                    store.setMeals(prev => [...prev, nm]);
+                    setMealInPlan(picker.day, picker.slot, newId);
+                    setManualEntry(''); setShowManualEntry(false); setPicker(null);
+                  }} style={{ background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 8, padding: '0 14px', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+                    Add
+                  </button>
+                  <button onClick={() => { setShowManualEntry(false); setManualEntry(''); }}
+                    style={{ background: 'var(--surface)', border: 'none', borderRadius: 8, padding: '0 10px', cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+                </div>
+              )}
+            </div>
             {pickerFavs.length > 0 && (
               <>
                 <SectionLabel>⭐ Favorites</SectionLabel>
@@ -404,7 +468,26 @@ export default function PlanScreen({ store }) {
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>2. Leftover nights?</h3>
+                  <h3 style={{ marginBottom: 4 }}>2. Which nights are you busy?</h3>
+                  <p className="text-sm mb-8">Those dinners will be 20 min or less, slow cooker, or leftovers.</p>
+                  <input
+                    value={wizardBusyNights}
+                    onChange={e => setWizardBusyNights(e.target.value)}
+                    placeholder="e.g. Tuesday, Wednesday, Thursday, Friday"
+                    style={{ marginBottom: 8 }}
+                  />
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {['Tuesday-Friday', 'Mon-Fri evenings', 'Weeknights', 'None this week'].map(opt => (
+                      <div key={opt} onClick={() => setWizardBusyNights(opt)}
+                        style={{ padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12, border: '1.5px solid ' + (wizardBusyNights === opt ? 'var(--green)' : 'var(--border)'), background: wizardBusyNights === opt ? 'var(--green-light)' : 'var(--bg-white)', color: wizardBusyNights === opt ? 'var(--green)' : 'var(--text-secondary)', fontWeight: wizardBusyNights === opt ? 700 : 400 }}>
+                        {opt}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="divider" />
+                <div className="mb-16">
+                  <h3 style={{ marginBottom: 4 }}>3. Leftover nights?</h3>
                   <p className="text-sm mb-12">Dinner covers next day's lunch.</p>
                   <div className="pill-group">
                     {[['0', 'None'], ['1-2', '1–2 nights'], ['3+', '3+ nights']].map(([val, label]) => (
@@ -414,7 +497,7 @@ export default function PlanScreen({ store }) {
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>3. Anything already locked in?</h3>
+                  <h3 style={{ marginBottom: 4 }}>4. Anything already locked in?</h3>
                   <p className="text-sm mb-8">Optional — e.g. "Tuesday dinner is breakfast for dinner"</p>
                   <textarea value={wizardLocked} onChange={e => setWizardLocked(e.target.value)}
                     placeholder="Leave blank if nothing is set yet…"
