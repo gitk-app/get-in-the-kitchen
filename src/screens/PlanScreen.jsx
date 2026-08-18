@@ -200,6 +200,26 @@ export default function PlanScreen({ store }) {
           )}
         </div>
 
+        {/* Welcome banner — shown when week is empty */}
+        {Object.keys(currentPlan).length === 0 && (
+          <div style={{
+            background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+            border: '1px solid #86efac', borderRadius: 16,
+            padding: '24px 20px', marginBottom: 20, textAlign: 'center'
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>👋</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#166534', marginBottom: 6 }}>
+              Welcome to GET IN THE KITCHEN
+            </div>
+            <div style={{ fontSize: 13, color: '#166534', opacity: 0.85, lineHeight: 1.6, marginBottom: 16 }}>
+              Your week is empty and ready to plan. Tap <strong>Build my week</strong> above and Claude will fill it in based on your budget and preferences — takes about 30 seconds.
+            </div>
+            <div style={{ fontSize: 12, color: '#166534', opacity: 0.7 }}>
+              Or tap any <strong>+</strong> cell below to add meals one at a time.
+            </div>
+          </div>
+        )}
+
         {/* Week grid */}
         <table className="week-grid">
           <thead>
