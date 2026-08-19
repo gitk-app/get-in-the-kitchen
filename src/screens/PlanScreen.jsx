@@ -1,3 +1,4 @@
+// GET IN THE KITCHEN — PlanScreen v2.1
 import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { DAYS, PLAN_SLOTS, PROTEIN_OPTIONS } from '../data/meals';
