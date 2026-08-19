@@ -93,33 +93,40 @@ export default function PlanScreen({ store }) {
     const pList = pantry.map(p => p.qty ? p.name + ' (' + p.qty + ')' : p.name);
     const currentMeals = store.mealsRef.current;
     const myMeals = currentMeals.map(m => `${m.name} (${m.slot}, $${m.cost.toFixed(2)})`).join('; ');
-    const proteins = wizardProteins.length ? wizardProteins.join(', ') : 'any';
+    const proteins = wizardProteins.length ? wizardProteins.join(', ') : 'chicken, eggs';
     const weekType = prefs?.weekType || 'normal';
-    const busyNights = wizardBusyNights;
 
-    const prompt = `Build a realistic 7-day meal plan (Sunday-Saturday) for a working single mom. Budget $${budget}/week.
+    const prompt = `You are meal planning for a busy working mom who batch cooks. Build a smart 7-day plan where meals connect to each other.
 
-CRITICAL RULES — follow these strictly:
-- ALL meals must be simple, practical, everyday home cooking. NO gourmet, restaurant-style, or chef-level meals.
-- Breakfast: quick options only — eggs, oatmeal, yogurt, toast, cereal, smoothies. Max 15 minutes.
-- Lunch: simple leftovers, sandwiches, wraps, salads, or soup. Max 10 minutes to assemble.
-- Dinner on BUSY nights (${busyNights}): MUST be 20 minutes or less, OR slow cooker set in morning, OR planned leftovers from previous night. No complex cooking on busy nights.
-- Dinner on other nights: still keep it simple — one-pan meals, casseroles, basic proteins with sides. Max 30-40 minutes.
-- Week type is "${weekType}" — ${weekType === 'busy' || weekType === 'chaotic' ? 'make almost everything quick and simple, prioritize leftovers and slow cooker meals' : weekType === 'relaxed' ? 'can include slightly more involved meals on weekends' : 'balance quick weeknight meals with slightly more effort on weekends'}.
-- Proteins to rotate: ${proteins}. Never the same protein at dinner more than 2 nights in a row.
-- Leftovers strategy: ${wizardLeftovers} nights where dinner leftovers cover next day lunch.
-- ${wizardLocked ? 'Already locked in: ' + wizardLocked + '.' : ''}
-- ${pList.length ? 'Use what I have on hand: ' + pList.join(', ') + '.' : ''}
-- Strongly prefer meals from my saved library: ${myMeals || 'none saved yet'}.
-- For new meals, keep names simple and descriptive — "Baked chicken thighs with rice" not "Herb-crusted pan-seared chicken".
+PROTEINS SELECTED: ${proteins}
+BUSY NIGHTS (quick meals only, max 20 min): ${wizardBusyNights}
+LOCKED MEALS: ${wizardLocked || 'none'}
+LEFTOVERS NIGHTS: ${wizardLeftovers}
+PANTRY ON HAND: ${pList.length ? pList.join(', ') : 'not specified'}
+MY SAVED MEALS: ${myMeals || 'none yet'}
 
-Set isNew:true for meals NOT in my saved library.
-JSON only, no preamble: {"Sunday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Monday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Tuesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Wednesday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Thursday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Friday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}},"Saturday":{"Breakfast":{"name":"","isNew":false},"Lunch":{"name":"","isNew":false},"Dinner":{"name":"","isNew":false}}}`;
+BATCH COOKING RULES — this is the most important part:
+1. Sunday dinner = the BIG COOK. Pick ONE protein and make a large batch (e.g. baked chicken thighs, crockpot pot roast, baked egg casserole). Set batchCook:true and batchProtein to the protein name.
+2. Monday and Tuesday meals should USE the Sunday batch in different forms. Example: Sunday = baked chicken thighs → Monday lunch = chicken wrap → Tuesday dinner = chicken quesadillas. Set fromBatch:true and batchSource:"Sunday dinner" on these meals.
+3. If a second protein is selected, Wednesday dinner = second small cook using that protein. Set batchCook:true.
+4. Thursday and Friday busy nights = leftovers from Wednesday OR ultra-quick meals (quesadillas, eggs, grilled cheese). Set fromBatch:true if using leftovers.
+5. Saturday = flexible, slightly more effort if desired.
+
+MEAL SIMPLICITY RULES:
+- Breakfast: eggs, oatmeal, yogurt, toast. Fast. Under 15 min.
+- Lunch: leftovers, wrap, sandwich, salad. Under 10 min.
+- Dinner on busy nights: leftovers, quesadillas, eggs, grilled cheese ONLY.
+- NO gourmet meals. Simple plain names only. "Baked chicken thighs" not "herb-crusted chicken".
+- Repeating meals is fine and realistic.
+- Use meals from my saved library whenever possible.
+
+Set isNew:true for meals not in my saved library.
+Respond ONLY with this exact JSON structure, no other text:
+{"Sunday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Monday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Tuesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Wednesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Thursday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Friday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Saturday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}}}`;
     try {
       const text = await apiFetch(prompt, 1400);
       const weekPlan = JSON.parse(text);
 
-      // Build all new meals first, collect them
       const newMealRecords = [];
       const newPlan = {};
 
@@ -129,15 +136,22 @@ JSON only, no preamble: {"Sunday":{"Breakfast":{"name":"","isNew":false},"Lunch"
           const entry = weekPlan[day]?.[slot];
           const name = typeof entry === 'string' ? entry : entry?.name || '';
           if (!name) return;
-          // Check library using ref (always fresh)
+          const batchCook = entry?.batchCook || false;
+          const fromBatch = entry?.fromBatch || false;
+          const batchSource = entry?.batchSource || '';
+          const batchProtein = entry?.batchProtein || '';
           const lib = store.mealsRef.current;
           let match = lib.find(m => m.name.toLowerCase() === name.toLowerCase() && m.slot === slot);
           if (!match) match = lib.find(m => m.name.toLowerCase().includes(name.toLowerCase().split(' ')[0]) && m.slot === slot);
           if (match) {
+            // Update existing meal with batch flags
+            if (batchCook || fromBatch) {
+              store.setMeals(prev => prev.map(m => m.id === match.id ? { ...m, batchCook, fromBatch, batchSource, batchProtein } : m));
+            }
             newPlan[day][slot] = match.id;
           } else {
             const newId = 'm' + Date.now() + '-' + day + '-' + slot + '-' + Math.random().toString(36).slice(2, 6);
-            const nm = { id: newId, name, slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 20, favorite: false };
+            const nm = { id: newId, name, slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 20, favorite: false, batchCook, fromBatch, batchSource, batchProtein };
             newMealRecords.push(nm);
             newPlan[day][slot] = newId;
           }
@@ -274,6 +288,16 @@ JSON only, no preamble: {"Sunday":{"Breakfast":{"name":"","isNew":false},"Lunch"
                               <span>${meal.cost.toFixed(2)}{meal.prepTime ? ' · ' + meal.prepTime + 'm' : ''}</span>
                               <span className="meal-cell-change" onClick={() => openPicker(day, slot)}>swap</span>
                             </div>
+                            {meal.batchCook && (
+                              <div style={{ fontSize: 9, marginTop: 3, color: '#166534', background: '#dcfce7', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 700 }}>
+                                🍳 BATCH COOK
+                              </div>
+                            )}
+                            {meal.fromBatch && meal.batchSource && (
+                              <div style={{ fontSize: 9, marginTop: 3, color: '#1e40af', background: '#dbeafe', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 600 }}>
+                                ↩ from {meal.batchSource}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="meal-cell-empty" onClick={() => openPicker(day, slot)}>+</div>
