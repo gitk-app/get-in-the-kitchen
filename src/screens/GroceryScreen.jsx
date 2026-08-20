@@ -375,8 +375,28 @@ export default function GroceryScreen({ store }) {
               </div>
             )}
             {checkedCount > 0 && (
-              <div style={{ marginTop: 16, textAlign: 'center' }}>
-                <button onClick={() => setChecked({})} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>Clear all checkmarks</button>
+              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                <button onClick={() => {
+                  // Remove any extras that are checked
+                  const checkedKeys = Object.entries(checked).filter(([, v]) => v).map(([k]) => k);
+                  setExtras(prev => prev.filter(item => {
+                    // Build the key the same way renderItem does
+                    const idx = planItems.length + lowPantryItems.length + prev.indexOf(item);
+                    const key = 'extra|' + idx + '|' + item.name;
+                    return !checkedKeys.includes(key);
+                  }));
+                  setChecked({});
+                }} style={{
+                  background: 'var(--green)', color: '#fff', border: 'none',
+                  borderRadius: 10, padding: '10px 20px', fontSize: 13,
+                  fontWeight: 600, cursor: 'pointer'
+                }}>
+                  ✓ Done — remove {checkedCount} purchased item{checkedCount > 1 ? 's' : ''}
+                </button>
+                <button onClick={() => setChecked({})}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>
+                  Just uncheck all
+                </button>
               </div>
             )}
           </div>
