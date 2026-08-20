@@ -116,34 +116,81 @@ export default function PantryScreen({ store }) {
   const [scanFeedback, setScanFeedback] = useState('');
   const [editItem, setEditItem] = useState(null);
 
+  // Personal UPC library — saved to localStorage
+  const loadUpcLibrary = () => {
+    try { return JSON.parse(localStorage.getItem('gitk_upc_library') || '{}'); } catch { return {}; }
+  };
+  const saveUpcLibrary = (lib) => {
+    try { localStorage.setItem('gitk_upc_library', JSON.stringify(lib)); } catch {}
+  };
+
   const handleAdd = () => {
     if (!name.trim()) return;
-    addPantryItem({
-      name: name.trim(),
-      qty: qty.trim(),
-      category,
-      type,
-      fresh: type === 'fresh',
-    });
+    addPantryItem({ name: name.trim(), qty: qty.trim(), category, type, fresh: type === 'fresh' });
     setName(''); setQty(''); setScanFeedback('');
   };
 
-  const [scanResult, setScanResult] = useState(null); // holds scanned item for quick-add confirmation
+  const [scanResult, setScanResult] = useState(null);
 
   const handleScanResult = ({ barcode, name: foundName, category: foundCategory, found }) => {
     setScanning(false);
-    if (found && foundName) {
-      // Show quick-add sheet with name pre-filled, ask for quantity
+
+    // Always check personal UPC library first
+    const upcLib = loadUpcLibrary();
+    const personalMatch = upcLib[barcode];
+
+    if (personalMatch) {
+      // Found in personal library
+      setScanResult({
+        name: personalMatch.name,
+        category: personalMatch.category || 'Pantry Staples',
+        qty: '',
+        type: 'shelf',
+        barcode,
+        fromPersonalLib: true,
+      });
+    } else if (found && foundName) {
+      // Found in Open Food Facts
       setScanResult({
         name: foundName,
         category: foundCategory || 'Pantry Staples',
         qty: '',
         type: 'shelf',
+        barcode,
+        fromPersonalLib: false,
       });
     } else {
-      // Not found — fall back to manual form
-      setScanFeedback('Barcode ' + barcode + ' not found — enter name manually');
+      // Not found anywhere — show quick-add sheet with empty name so user can type it
+      // and we'll save the UPC mapping for next time
+      setScanResult({
+        name: '',
+        category: 'Pantry Staples',
+        qty: '',
+        type: 'shelf',
+        barcode,
+        fromPersonalLib: false,
+        notFound: true,
+      });
     }
+  };
+
+  const handleScanAdd = (result) => {
+    if (!result.name.trim()) return;
+    // Save to personal UPC library if we have a barcode
+    if (result.barcode && !result.fromPersonalLib) {
+      const upcLib = loadUpcLibrary();
+      upcLib[result.barcode] = { name: result.name.trim(), category: result.category };
+      saveUpcLibrary(upcLib);
+    }
+    addPantryItem({
+      name: result.name.trim(),
+      qty: result.qty.trim(),
+      category: result.category,
+      type: result.type,
+      fresh: result.type === 'fresh',
+    });
+    setScanResult(null);
+    setScanFeedback('✓ Added: ' + result.name.trim());
   };
 
   const handleSaveEdit = (updatedItem) => {
@@ -202,40 +249,54 @@ export default function PantryScreen({ store }) {
             <div style={{ width: 40, height: 4, background: 'var(--border-strong)', borderRadius: 2, margin: '12px auto 0' }} />
             <div style={{ padding: '12px 16px 10px', borderBottom: '0.5px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 16, fontWeight: 700 }}>Add to pantry</span>
+                <div>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>
+                    {scanResult.fromPersonalLib ? '⭐ Recognized from your list' : scanResult.notFound ? '❓ Item not found' : 'Add to pantry'}
+                  </span>
+                  {scanResult.notFound && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Type the name below — we'll remember this barcode for next time
+                    </div>
+                  )}
+                  {scanResult.fromPersonalLib && (
+                    <div style={{ fontSize: 12, color: 'var(--green)', marginTop: 2 }}>
+                      Matched from your personal scan history
+                    </div>
+                  )}
+                </div>
                 <button onClick={() => setScanResult(null)} style={{ background: 'var(--surface)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>✕</button>
               </div>
             </div>
             <div style={{ padding: '16px 16px 32px' }}>
-              {/* Item name — editable in case scan was slightly off */}
               <div className="form-group">
-                <label>Item</label>
+                <label>{scanResult.notFound ? 'What is this item?' : 'Item'}</label>
                 <input
                   value={scanResult.name}
                   onChange={e => setScanResult(r => ({ ...r, name: e.target.value }))}
+                  placeholder={scanResult.notFound ? 'e.g. Aldi Fit & Active Yogurt' : ''}
+                  autoFocus={scanResult.notFound}
                 />
+                {scanResult.notFound && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Barcode {scanResult.barcode} · Will be saved to your personal scan list
+                  </div>
+                )}
               </div>
-
-              {/* Quantity — the main focus here */}
               <div className="form-group">
                 <label>How much do you have?</label>
                 <input
                   value={scanResult.qty}
                   onChange={e => setScanResult(r => ({ ...r, qty: e.target.value }))}
-                  placeholder="e.g. 2 cans, 1 bag, 3 lbs, 6 count"
-                  autoFocus
+                  placeholder="e.g. 2 cans, 1 bag, 3 lbs"
+                  autoFocus={!scanResult.notFound}
                 />
               </div>
-
-              {/* Category */}
               <div className="form-group">
                 <label>Category</label>
                 <select value={scanResult.category} onChange={e => setScanResult(r => ({ ...r, category: e.target.value }))}>
                   {PANTRY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-
-              {/* Storage type */}
               <div className="mb-12">
                 <label>Storage type</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
@@ -253,24 +314,10 @@ export default function PantryScreen({ store }) {
                   ))}
                 </div>
               </div>
-
-              <Button variant="primary" onClick={() => {
-                if (!scanResult.name.trim()) return;
-                addPantryItem({
-                  name: scanResult.name.trim(),
-                  qty: scanResult.qty.trim(),
-                  category: scanResult.category,
-                  type: scanResult.type,
-                  fresh: scanResult.type === 'fresh',
-                });
-                setScanResult(null);
-                setScanFeedback('✓ Added: ' + scanResult.name.trim());
-              }}>
-                <Icon name="plus" size={16} /> Add to pantry
+              <Button variant="primary" onClick={() => handleScanAdd(scanResult)} disabled={!scanResult.name.trim()}>
+                <Icon name="plus" size={16} /> Add to pantry{scanResult.notFound && scanResult.name.trim() ? ' · Save to my scan list' : ''}
               </Button>
-
-              <button
-                onClick={() => setScanResult(null)}
+              <button onClick={() => setScanResult(null)}
                 style={{ width: '100%', marginTop: 8, padding: '10px', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
                 Cancel
               </button>
