@@ -377,14 +377,16 @@ export default function GroceryScreen({ store }) {
             {checkedCount > 0 && (
               <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => {
-                  // Remove any extras that are checked
-                  const checkedKeys = Object.entries(checked).filter(([, v]) => v).map(([k]) => k);
-                  setExtras(prev => prev.filter(item => {
-                    // Build the key the same way renderItem does
-                    const idx = planItems.length + lowPantryItems.length + prev.indexOf(item);
-                    const key = 'extra|' + idx + '|' + item.name;
-                    return !checkedKeys.includes(key);
-                  }));
+                  // Find which extra items are checked by rebuilding their keys
+                  const checkedKeys = new Set(Object.entries(checked).filter(([, v]) => v).map(([k]) => k));
+                  setExtras(prev => {
+                    return prev.filter(item => {
+                      // Rebuild the key exactly as renderItem does
+                      const itemIdx = allItems.findIndex(a => a.source === 'extra' && a.id === item.id);
+                      const key = 'extra|' + itemIdx + '|' + item.name;
+                      return !checkedKeys.has(key);
+                    });
+                  });
                   setChecked({});
                 }} style={{
                   background: 'var(--green)', color: '#fff', border: 'none',
