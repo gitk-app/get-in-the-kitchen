@@ -128,11 +128,11 @@ export default function GroceryScreen({ store }) {
       .map(p => ({ name: p.name, store: '', source: 'pantry', qty: p.qty }));
   }, [pantry]);
 
-  // Assign stable keys to every item so we can track them reliably
+  // Assign stable keys to every item based on content, not index position
   const allItemsRaw = useMemo(() => [
-    ...planItems.map((item, i) => ({ ...item, stableKey: 'plan|' + i + '|' + item.name })),
-    ...lowPantryItems.map((item, i) => ({ ...item, stableKey: 'pantry|' + i + '|' + item.name })),
-    ...extras.map(item => ({ ...item, stableKey: 'extra|' + item.id + '|' + item.name })),
+    ...planItems.map(item => ({ ...item, stableKey: 'plan|' + item.name + '|' + (item.store || '') })),
+    ...lowPantryItems.map(item => ({ ...item, stableKey: 'pantry|' + item.name })),
+    ...extras.map(item => ({ ...item, stableKey: 'extra|' + item.id })),
   ], [planItems, lowPantryItems, extras]);
 
   const allItems = useMemo(() => allItemsRaw.filter(item => !dismissed.has(item.stableKey)), [allItemsRaw, dismissed]);
