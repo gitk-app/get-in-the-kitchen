@@ -140,7 +140,7 @@ export default function GroceryScreen({ store }) {
   const byStore = useMemo(() => {
     const groups = {};
     allItems.forEach((item, idx) => {
-      const key = item.source + '|' + idx + '|' + item.name;
+      const key = item.stableKey;
       const s = storeOverrides[key] || item.store || 'No store';
       if (!groups[s]) groups[s] = [];
       groups[s].push({ ...item, idx, key });
@@ -161,7 +161,7 @@ export default function GroceryScreen({ store }) {
   };
 
   const renderItem = (item, idx) => {
-    const key = item.stableKey || (item.source + '|' + idx + '|' + item.name);
+    const key = item.stableKey;
     const isChecked = checked[key];
     const currentStore = storeOverrides[key] || item.store || '';
     const storeColor = currentStore ? getStoreColor(currentStore) : null;
