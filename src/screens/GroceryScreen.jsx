@@ -50,6 +50,7 @@ export default function GroceryScreen({ store }) {
   });
 
   const [checked, setChecked] = useState({});
+  const [dismissed, setDismissed] = useState(new Set());
   const [storeOverrides, setStoreOverrides] = useState({});
   const [editingStore, setEditingStore] = useState(null);
   const [extras, setExtras] = useState(() => {
@@ -92,6 +93,7 @@ export default function GroceryScreen({ store }) {
     localStorage.setItem('gitk_trip_history', JSON.stringify(updated));
     setStoreTotals({});
     setChecked({});
+    setDismissed(new Set());
     alert('Trip saved! Totals have been reset for your next trip.');
   };
 
@@ -126,7 +128,14 @@ export default function GroceryScreen({ store }) {
       .map(p => ({ name: p.name, store: '', source: 'pantry', qty: p.qty }));
   }, [pantry]);
 
-  const allItems = useMemo(() => [...planItems, ...lowPantryItems, ...extras], [planItems, lowPantryItems, extras]);
+  // Assign stable keys to every item so we can track them reliably
+  const allItemsRaw = useMemo(() => [
+    ...planItems.map((item, i) => ({ ...item, stableKey: 'plan|' + i + '|' + item.name })),
+    ...lowPantryItems.map((item, i) => ({ ...item, stableKey: 'pantry|' + i + '|' + item.name })),
+    ...extras.map(item => ({ ...item, stableKey: 'extra|' + item.id + '|' + item.name })),
+  ], [planItems, lowPantryItems, extras]);
+
+  const allItems = useMemo(() => allItemsRaw.filter(item => !dismissed.has(item.stableKey)), [allItemsRaw, dismissed]);
 
   const byStore = useMemo(() => {
     const groups = {};
@@ -152,7 +161,7 @@ export default function GroceryScreen({ store }) {
   };
 
   const renderItem = (item, idx) => {
-    const key = item.key || (item.source + '|' + idx + '|' + item.name);
+    const key = item.stableKey || (item.source + '|' + idx + '|' + item.name);
     const isChecked = checked[key];
     const currentStore = storeOverrides[key] || item.store || '';
     const storeColor = currentStore ? getStoreColor(currentStore) : null;
@@ -377,16 +386,9 @@ export default function GroceryScreen({ store }) {
             {checkedCount > 0 && (
               <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => {
-                  // Find which extra items are checked by rebuilding their keys
+                  // Add all checked keys to dismissed set so they disappear from the list
                   const checkedKeys = new Set(Object.entries(checked).filter(([, v]) => v).map(([k]) => k));
-                  setExtras(prev => {
-                    return prev.filter(item => {
-                      // Rebuild the key exactly as renderItem does
-                      const itemIdx = allItems.findIndex(a => a.source === 'extra' && a.id === item.id);
-                      const key = 'extra|' + itemIdx + '|' + item.name;
-                      return !checkedKeys.has(key);
-                    });
-                  });
+                  setDismissed(prev => new Set([...prev, ...checkedKeys]));
                   setChecked({});
                 }} style={{
                   background: 'var(--green)', color: '#fff', border: 'none',
