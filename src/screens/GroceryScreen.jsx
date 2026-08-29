@@ -128,11 +128,11 @@ export default function GroceryScreen({ store }) {
       .map(p => ({ name: p.name, store: '', source: 'pantry', qty: p.qty }));
   }, [pantry]);
 
-  // Assign stable keys to every item based on content, not index position
+  // Use simple integer index as key - dead simple, no ambiguity
   const allItemsRaw = useMemo(() => [
-    ...planItems.map(item => ({ ...item, stableKey: 'plan|' + item.name + '|' + (item.store || '') })),
-    ...lowPantryItems.map(item => ({ ...item, stableKey: 'pantry|' + item.name })),
-    ...extras.map(item => ({ ...item, stableKey: 'extra|' + item.id })),
+    ...planItems.map((item, i) => ({ ...item, stableKey: 'p' + i + '_' + item.name.slice(0,8) })),
+    ...lowPantryItems.map((item, i) => ({ ...item, stableKey: 'l' + i + '_' + item.name.slice(0,8) })),
+    ...extras.map((item, i) => ({ ...item, stableKey: 'e_' + item.id })),
   ], [planItems, lowPantryItems, extras]);
 
   const allItems = useMemo(() => allItemsRaw.filter(item => !dismissed.has(item.stableKey)), [allItemsRaw, dismissed]);
@@ -386,7 +386,6 @@ export default function GroceryScreen({ store }) {
             {checkedCount > 0 && (
               <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => {
-                  // Add all checked keys to dismissed set so they disappear from the list
                   const checkedKeys = new Set(Object.entries(checked).filter(([, v]) => v).map(([k]) => k));
                   setDismissed(prev => new Set([...prev, ...checkedKeys]));
                   setChecked({});
