@@ -13,8 +13,9 @@ const STORE_COLORS = {
 };
 
 function getStoreColor(s) {
+  if (!s) return STORE_COLORS['Other'];
   for (const [key, val] of Object.entries(STORE_COLORS)) {
-    if (s && s.toLowerCase().includes(key.toLowerCase())) return val;
+    if (s.toLowerCase().includes(key.toLowerCase())) return val;
   }
   return STORE_COLORS['Other'];
 }
@@ -27,7 +28,6 @@ const STORE_DOMAINS = {
   "trader joe's": 'traderjoes.com',
   'kroger': 'kroger.com',
   'target': 'target.com',
-  'whole foods': 'wholefoodsmarket.com',
   'publix': 'publix.com',
   'heb': 'heb.com',
   'h-e-b': 'heb.com',
@@ -37,26 +37,14 @@ const STORE_DOMAINS = {
   'wegmans': 'wegmans.com',
   'sprouts': 'sprouts.com',
   'food lion': 'foodlion.com',
-  'giant': 'giantfood.com',
-  'stop & shop': 'stopandshop.com',
   'safeway': 'safeway.com',
   'albertsons': 'albertsons.com',
-  'smith\'s': 'smithsfoodanddrug.com',
-  'fred meyer': 'fredmeyer.com',
-  'ralphs': 'ralphs.com',
-  'harris teeter': 'harristeeter.com',
-  'price chopper': 'pricechopper.com',
+  'whole foods': 'wholefoodsmarket.com',
+  'lidl': 'lidl.com',
   'hy-vee': 'hy-vee.com',
   'piggly wiggly': 'pigglywiggly.com',
-  'food city': 'foodcity.com',
   'ingles': 'ingles-markets.com',
-  'brookshire': 'brookshires.com',
-  'stater bros': 'staterbros.com',
   'winco': 'wincofoods.com',
-  'market basket': 'marketbasket.com',
-  'price rite': 'priceritemarketplace.com',
-  'lidl': 'lidl.com',
-  'aldi nord': 'aldi.com',
 };
 
 function getStoreDomain(name) {
@@ -65,40 +53,59 @@ function getStoreDomain(name) {
   for (const [key, domain] of Object.entries(STORE_DOMAINS)) {
     if (lower.includes(key)) return domain;
   }
-  // Try to guess domain from name for custom stores
-  const slug = lower.replace(/[^a-z0-9]/g, '');
-  return slug + '.com';
+  return null;
 }
 
-function StoreLogo({ name, size = 18, style = {} }) {
+function StoreLogo({ name, size }) {
   const [failed, setFailed] = useState(false);
-  const domain = getStoreDomain(name);
   const sc = getStoreColor(name);
+  const domain = getStoreDomain(name);
+  const logoSize = size || 16;
 
-  if (failed || !domain) {
+  if (!failed && domain) {
     return (
-      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: sc.bg, color: sc.label, border: '0.5px solid ' + sc.border, ...style }}>
-        {name}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: sc.bg, border: '0.5px solid ' + sc.border, borderRadius: 6, padding: '2px 7px' }}>
+        <img
+          src={'https://www.google.com/s2/favicons?domain=' + domain + '&sz=32'}
+          alt={name}
+          width={logoSize}
+          height={logoSize}
+          style={{ borderRadius: 2, objectFit: 'contain' }}
+          onError={() => setFailed(true)}
+        />
+        <span style={{ fontSize: 11, fontWeight: 600, color: sc.label }}>{name}</span>
       </span>
     );
   }
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: sc.bg, border: '0.5px solid ' + sc.border, borderRadius: 6, padding: '2px 8px', ...style }}>
-      <img
-        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-        alt={name}
-        width={size}
-        height={size}
-        style={{ borderRadius: 3, objectFit: 'contain' }}
-        onError={() => setFailed(true)}
-      />
-      <span style={{ fontSize: 11, fontWeight: 600, color: sc.label }}>{name}</span>
+    <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: sc.bg, color: sc.label, border: '0.5px solid ' + sc.border }}>
+      {name}
     </span>
   );
 }
 
-
+function StoreBarChart({ stores, total }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      {Object.entries(stores).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a).map(([s, v]) => {
+        const sc = getStoreColor(s);
+        const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+        return (
+          <div key={s} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'center' }}>
+              <StoreLogo name={s} size={14} />
+              <span style={{ fontSize: 13, fontWeight: 700 }}>${v.toFixed(2)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>({pct}%)</span></span>
+            </div>
+            <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: pct + '%', background: sc.bar, borderRadius: 4 }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const FREQ_OPTIONS = [
   { value: 'weekly', label: 'Weekly', trips: 4 },
@@ -108,33 +115,8 @@ const FREQ_OPTIONS = [
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function getMonthKey(date) {
-  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
-}
-
-function getCurrentYear() { return new Date().getFullYear(); }
-
-// Simple bar chart component
-function StoreBarChart({ stores, max }) {
-  return (
-    <div style={{ marginTop: 12 }}>
-      {Object.entries(stores).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a).map(([s, v]) => {
-        const sc = getStoreColor(s);
-        const pct = max > 0 ? Math.round((v / max) * 100) : 0;
-        return (
-          <div key={s} style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: sc.label }}>{s}</span>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>${v.toFixed(2)} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>({pct}%)</span></span>
-            </div>
-            <div style={{ height: 10, background: 'var(--surface)', borderRadius: 5, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: pct + '%', background: sc.bar, borderRadius: 5, transition: 'width .4s' }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+function getMonthKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
 export default function GroceryScreen({ store }) {
@@ -147,35 +129,27 @@ export default function GroceryScreen({ store }) {
   const perTripBudget = Math.round(monthlyBudget / trips);
   const userStores = prefs?.stores || [];
 
-  // Trip history — persisted
-  const [tripHistory, setTripHistory] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('gitk_trip_history') || '[]');
-      // Filter out trips from previous years for YTD reset
-      return saved;
-    } catch { return []; }
-  });
-
-  // Store totals for current trip
   const [storeTotals, setStoreTotals] = useState(() => {
     try { return JSON.parse(localStorage.getItem('gitk_store_totals') || '{}'); } catch { return {}; }
   });
   useEffect(() => { localStorage.setItem('gitk_store_totals', JSON.stringify(storeTotals)); }, [storeTotals]);
 
-  // View state
+  const [tripHistory, setTripHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gitk_trip_history') || '[]'); } catch { return []; }
+  });
+
+  const [extras, setExtras] = useState(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem('gitk_grocery_extras') || '[]');
+      if (p.length) localStorage.removeItem('gitk_grocery_extras');
+      return p;
+    } catch { return []; }
+  });
+
   const [view, setView] = useState('all');
   const [activeStoreTab, setActiveStoreTab] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-
-  // Extra items
-  const [extras, setExtras] = useState(() => {
-    try {
-      const pending = JSON.parse(localStorage.getItem('gitk_grocery_extras') || '[]');
-      if (pending.length) localStorage.removeItem('gitk_grocery_extras');
-      return pending;
-    } catch { return []; }
-  });
   const [extraName, setExtraName] = useState('');
   const [extraStore, setExtraStore] = useState('');
   const [addingExtra, setAddingExtra] = useState(false);
@@ -184,54 +158,38 @@ export default function GroceryScreen({ store }) {
   const [removed, setRemoved] = useState(new Set());
   const [checkedNames, setCheckedNames] = useState(new Set());
 
-  // ── BUDGET CALCULATIONS ──────────────────────────────────────────────
-  const currentYear = getCurrentYear();
+  const currentYear = new Date().getFullYear();
   const currentMonthKey = getMonthKey(new Date());
 
-  // Year to date — only current calendar year trips
-  const ytdTrips = useMemo(() => tripHistory.filter(t => {
-    if (!t.yearKey) return false;
-    return t.yearKey === String(currentYear);
-  }), [tripHistory, currentYear]);
-
+  const ytdTrips = useMemo(() => tripHistory.filter(t => t.yearKey === String(currentYear)), [tripHistory, currentYear]);
   const ytdTotal = useMemo(() => ytdTrips.reduce((s, t) => s + (t.total || 0), 0), [ytdTrips]);
 
-  // Monthly totals from history
   const monthlySpent = useMemo(() => {
     const spent = {};
-    tripHistory.forEach(t => {
-      if (!t.monthKey) return;
-      spent[t.monthKey] = (spent[t.monthKey] || 0) + (t.total || 0);
-    });
+    tripHistory.forEach(t => { if (t.monthKey) spent[t.monthKey] = (spent[t.monthKey] || 0) + (t.total || 0); });
     return spent;
   }, [tripHistory]);
 
-  // Current month spent (from saved trips)
   const currentMonthSpent = monthlySpent[currentMonthKey] || 0;
   const currentMonthRemaining = monthlyBudget - currentMonthSpent;
   const currentMonthOver = currentMonthSpent > monthlyBudget;
 
-  // This trip
   const tripTotal = Object.values(storeTotals).reduce((s, v) => s + (parseFloat(v) || 0), 0);
   const tripRemaining = perTripBudget - tripTotal;
   const tripOver = tripTotal > perTripBudget;
 
-  // Last 3 months for history view
   const last3Months = useMemo(() => {
     const result = [];
     const now = new Date();
     for (let i = 0; i < 3; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = getMonthKey(d);
-      const monthTrips = tripHistory.filter(t => t.monthKey === key);
-      const total = monthTrips.reduce((s, t) => s + (t.total || 0), 0);
+      const label = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+      const mTrips = tripHistory.filter(t => t.monthKey === key);
+      const total = mTrips.reduce((s, t) => s + (t.total || 0), 0);
       const allStores = {};
-      monthTrips.forEach(t => {
-        Object.entries(t.stores || {}).forEach(([s, v]) => {
-          allStores[s] = (allStores[s] || 0) + (parseFloat(v) || 0);
-        });
-      });
-      result.push({ key, label: MONTHS[d.getMonth()] + ' ' + d.getFullYear(), trips: monthTrips, total, allStores, budget: monthlyBudget });
+      mTrips.forEach(t => Object.entries(t.stores || {}).forEach(([s, v]) => { allStores[s] = (allStores[s] || 0) + (parseFloat(v) || 0); }));
+      result.push({ key, label, trips: mTrips, total, allStores, budget: monthlyBudget });
     }
     return result;
   }, [tripHistory, monthlyBudget]);
@@ -253,10 +211,9 @@ export default function GroceryScreen({ store }) {
     setStoreTotals({});
     setCheckedNames(new Set());
     setRemoved(new Set());
-    alert(`Trip saved! $${tripTotal.toFixed(2)} logged for ${t.date}.`);
+    alert('Trip saved! $' + tripTotal.toFixed(2) + ' logged.');
   };
 
-  // ── GROCERY LIST ─────────────────────────────────────────────────────
   const planItems = useMemo(() => {
     const plan = plans['week' + activeWeek] || {};
     const seen = {};
@@ -280,14 +237,6 @@ export default function GroceryScreen({ store }) {
   const allItems = useMemo(() => [...planItems, ...lowPantryItems, ...extras]
     .filter(item => !removed.has(item.name + '|' + item.source)), [planItems, lowPantryItems, extras, removed]);
 
-  const toggleCheck = (name, source) => {
-    const k = name + '|' + source;
-    setCheckedNames(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
-  };
-  const isChecked = (name, source) => checkedNames.has(name + '|' + source);
-  const checkedCount = checkedNames.size;
-  const removeChecked = () => { setRemoved(prev => new Set([...prev, ...checkedNames])); setCheckedNames(new Set()); };
-
   const getItemStore = (item) => storeOverrides[item.name] || item.store || '';
 
   const byStore = useMemo(() => {
@@ -295,6 +244,15 @@ export default function GroceryScreen({ store }) {
     allItems.forEach(item => { const s = getItemStore(item) || 'No store'; if (!g[s]) g[s] = []; g[s].push(item); });
     return g;
   }, [allItems, storeOverrides]);
+
+  const toggleCheck = (name, source) => {
+    const k = name + '|' + source;
+    setCheckedNames(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  };
+
+  const isChecked = (name, source) => checkedNames.has(name + '|' + source);
+  const checkedCount = checkedNames.size;
+  const removeChecked = () => { setRemoved(prev => new Set([...prev, ...checkedNames])); setCheckedNames(new Set()); };
 
   const addExtra = () => {
     if (!extraName.trim()) return;
@@ -305,7 +263,6 @@ export default function GroceryScreen({ store }) {
   const renderItem = (item) => {
     const checked = isChecked(item.name, item.source);
     const currentStore = getItemStore(item);
-    const sc = currentStore ? getStoreColor(currentStore) : null;
     const isEditingThis = editingStore === item.name + item.source;
     return (
       <div key={item.name + item.source} style={{ padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
@@ -315,10 +272,9 @@ export default function GroceryScreen({ store }) {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 500, textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>{item.name}</div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span onClick={() => setEditingStore(isEditingThis ? null : item.name + item.source)}
-                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <StoreLogo name={currentStore || 'No store'} size={14} />
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span onClick={() => setEditingStore(isEditingThis ? null : item.name + item.source)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <StoreLogo name={currentStore || 'No store'} size={13} />
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>▼</span>
               </span>
               {item.source === 'pantry' && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Running low</span>}
@@ -326,9 +282,9 @@ export default function GroceryScreen({ store }) {
             </div>
             {isEditingThis && (
               <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {userStores.concat(['Other']).map(s => { const c = getStoreColor(s); const sel = currentStore === s; return <div key={s} onClick={() => { setStoreOverrides(p => ({ ...p, [item.name]: s })); setEditingStore(null); }} style={{ padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: sel ? 700 : 400, border: '1.5px solid ' + (sel ? c.label : c.border), background: sel ? c.bg : 'var(--bg-white)', color: sel ? c.label : 'var(--text-secondary)' }}>{s}</div>; })}
-                <div onClick={() => { setStoreOverrides(p => ({ ...p, [item.name]: '' })); setEditingStore(null); }} style={{ padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>No store</div>
-                <div onClick={() => setEditingStore(null)} style={{ padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>Cancel</div>
+                {userStores.concat(['Other']).map(s => { const c = getStoreColor(s); const sel = currentStore === s; return <div key={s} onClick={() => { setStoreOverrides(p => ({ ...p, [item.name]: s })); setEditingStore(null); }} style={{ padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: sel ? 700 : 400, border: '1.5px solid ' + (sel ? c.label : c.border), background: sel ? c.bg : 'var(--bg-white)', color: sel ? c.label : 'var(--text-secondary)' }}>{s}</div>; })}
+                <div onClick={() => { setStoreOverrides(p => ({ ...p, [item.name]: '' })); setEditingStore(null); }} style={{ padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>No store</div>
+                <div onClick={() => setEditingStore(null)} style={{ padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>Cancel</div>
               </div>
             )}
           </div>
@@ -350,40 +306,28 @@ export default function GroceryScreen({ store }) {
 
       <div className="screen-padded">
 
-        {/* ── BUDGET SUMMARY CARD ── */}
+        {/* Budget card */}
         <div className="card mb-12">
-          {/* Monthly remaining — always visible */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2 }}>Monthly budget</div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>${monthlyBudget}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{trips} trips · ${perTripBudget}/trip</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{trips} trips · ${perTripBudget}/trip</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2, color: currentMonthOver ? 'var(--danger)' : 'var(--green)' }}>
-                {currentMonthOver ? 'Over budget' : 'Remaining'}
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: currentMonthOver ? 'var(--danger)' : 'var(--green)' }}>
-                ${Math.abs(currentMonthRemaining).toFixed(0)}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                ${currentMonthSpent.toFixed(2)} spent this month
-              </div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2, color: currentMonthOver ? 'var(--danger)' : 'var(--green)' }}>{currentMonthOver ? 'Over budget' : 'Remaining'}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: currentMonthOver ? 'var(--danger)' : 'var(--green)' }}>${Math.abs(currentMonthRemaining).toFixed(0)}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>${currentMonthSpent.toFixed(2)} spent this month</div>
             </div>
           </div>
-
-          {/* Monthly budget bar */}
-          <div style={{ marginBottom: 4 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-              <span>Monthly spent</span>
-              <span>${currentMonthSpent.toFixed(2)} of ${monthlyBudget}</span>
-            </div>
-            <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
-              <div style={{ height: '100%', width: Math.min(100, (currentMonthSpent / monthlyBudget) * 100) + '%', background: currentMonthOver ? 'var(--danger)' : 'var(--green)', borderRadius: 4, transition: 'width .3s' }} />
-            </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span>Monthly spent</span><span>${currentMonthSpent.toFixed(2)} of ${monthlyBudget}</span>
+          </div>
+          <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+            <div style={{ height: '100%', width: Math.min(100, (currentMonthSpent / monthlyBudget) * 100) + '%', background: currentMonthOver ? 'var(--danger)' : 'var(--green)', borderRadius: 4 }} />
           </div>
 
-          {/* This trip */}
+          {/* This trip sub-card */}
           <div style={{ background: 'var(--surface)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div>
@@ -392,7 +336,7 @@ export default function GroceryScreen({ store }) {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: tripOver ? 'var(--danger)' : tripTotal > 0 ? 'var(--green)' : 'var(--text)' }}>${tripTotal.toFixed(2)}</div>
-                {tripTotal > 0 && <div style={{ fontSize: 11, color: tripOver ? 'var(--danger)' : 'var(--green)' }}>{tripOver ? `$${Math.abs(tripRemaining).toFixed(2)} over` : `$${tripRemaining.toFixed(2)} left`}</div>}
+                {tripTotal > 0 && <div style={{ fontSize: 11, color: tripOver ? 'var(--danger)' : 'var(--green)' }}>{tripOver ? '$' + Math.abs(tripRemaining).toFixed(2) + ' over' : '$' + tripRemaining.toFixed(2) + ' left'}</div>}
               </div>
             </div>
             <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
@@ -400,23 +344,20 @@ export default function GroceryScreen({ store }) {
             </div>
           </div>
 
-          {/* Per-store entry */}
+          {/* Store totals */}
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Enter totals by store</div>
-          {userStores.map(s => {
-            const sc = getStoreColor(s);
-            return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ flexShrink: 0 }}><StoreLogo name={s} size={16} /></span>
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-muted)' }}>$</span>
-                  <input type="number" step="0.01" placeholder="0.00" value={storeTotals[s] || ''}
-                    onChange={e => setStoreTotals(p => ({ ...p, [s]: e.target.value }))}
-                    style={{ width: '100%', paddingLeft: 22, height: 38, fontSize: 15, fontWeight: 600 }} />
-                </div>
-                {storeTotals[s] && parseFloat(storeTotals[s]) > 0 && <Icon name="check-circle" size={18} style={{ color: 'var(--green)', flexShrink: 0 }} />}
+          {userStores.map(s => (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <StoreLogo name={s} size={16} />
+              <div style={{ flex: 1, position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-muted)' }}>$</span>
+                <input type="number" step="0.01" placeholder="0.00" value={storeTotals[s] || ''}
+                  onChange={e => setStoreTotals(p => ({ ...p, [s]: e.target.value }))}
+                  style={{ width: '100%', paddingLeft: 22, height: 38, fontSize: 15, fontWeight: 600 }} />
               </div>
-            );
-          })}
+              {storeTotals[s] && parseFloat(storeTotals[s]) > 0 && <Icon name="check-circle" size={18} style={{ color: 'var(--green)', flexShrink: 0 }} />}
+            </div>
+          ))}
 
           {tripTotal > 0 && (
             <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -429,7 +370,7 @@ export default function GroceryScreen({ store }) {
           )}
         </div>
 
-        {/* ── YTD CARD ── */}
+        {/* YTD card */}
         <div className="card mb-12" style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '0.5px solid #86efac' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <div>
@@ -442,11 +383,9 @@ export default function GroceryScreen({ store }) {
             </div>
           </div>
           <div style={{ height: 8, background: 'rgba(255,255,255,0.5)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: Math.min(100, (ytdTotal / annualBudget) * 100) + '%', background: '#16a34a', borderRadius: 4, transition: 'width .3s' }} />
+            <div style={{ height: '100%', width: Math.min(100, (ytdTotal / annualBudget) * 100) + '%', background: '#16a34a', borderRadius: 4 }} />
           </div>
-          <div style={{ fontSize: 11, color: '#166534', marginTop: 6, opacity: 0.8 }}>
-            ${(annualBudget - ytdTotal).toFixed(2)} remaining for {currentYear}
-          </div>
+          <div style={{ fontSize: 11, color: '#166534', marginTop: 6, opacity: 0.8 }}>${(annualBudget - ytdTotal).toFixed(2)} remaining for {currentYear}</div>
         </div>
 
         {/* View tabs */}
@@ -459,17 +398,25 @@ export default function GroceryScreen({ store }) {
         {view === 'all' && (
           <div>
             {planItems.filter(i => !removed.has(i.name + '|' + i.source)).length > 0 && (
-              <div className="mb-16"><SectionLabel>From your meal plan</SectionLabel>{planItems.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}</div>
+              <div className="mb-16">
+                <SectionLabel>From your meal plan</SectionLabel>
+                {planItems.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}
+              </div>
             )}
             {lowPantryItems.filter(i => !removed.has(i.name + '|' + i.source)).length > 0 && (
-              <div className="mb-16"><SectionLabel>Running low in pantry</SectionLabel>{lowPantryItems.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}</div>
+              <div className="mb-16">
+                <SectionLabel>Running low in pantry</SectionLabel>
+                {lowPantryItems.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}
+              </div>
             )}
             <div className="mb-16">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <SectionLabel>Extra items</SectionLabel>
                 <button onClick={() => setAddingExtra(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={14} /> Add item</button>
               </div>
-              {extras.filter(i => !removed.has(i.name + '|' + i.source)).length === 0 && !addingExtra && <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>Tap "+ Add item" for anything not on your meal plan</div>}
+              {extras.filter(i => !removed.has(i.name + '|' + i.source)).length === 0 && !addingExtra && (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>Tap "+ Add item" for anything not on your meal plan</div>
+              )}
               {extras.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}
               {addingExtra && (
                 <div className="card-flat" style={{ marginTop: 8, padding: 12 }}>
@@ -484,7 +431,13 @@ export default function GroceryScreen({ store }) {
                 </div>
               )}
             </div>
-            {allItems.length === 0 && <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}><div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div><div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No items yet</div><div style={{ fontSize: 13 }}>Add meals to your weekly plan and they'll appear here.</div></div>}
+            {allItems.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No items yet</div>
+                <div style={{ fontSize: 13 }}>Add meals to your weekly plan and they'll appear here.</div>
+              </div>
+            )}
             {checkedCount > 0 && (
               <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 <button onClick={removeChecked} style={{ background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>✓ Remove {checkedCount} purchased item{checkedCount > 1 ? 's' : ''}</button>
@@ -497,24 +450,31 @@ export default function GroceryScreen({ store }) {
         {/* By store */}
         {view === 'by-store' && (
           <div>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-              {userStores.map(s => { const c = getStoreColor(s); const isActive = activeStoreTab === s; const count = byStore[s]?.length || 0; return <button key={s} onClick={() => setActiveStoreTab(s)} style={{ padding: '6px 12px', borderRadius: 20, border: '1.5px solid', borderColor: isActive ? c.label : c.border, background: isActive ? c.bg : 'var(--bg-white)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><StoreLogo name={s} size={14} />{count > 0 && <span style={{ fontSize: 11, color: isActive ? c.label : 'var(--text-muted)', fontWeight: 600 }}>({count})</span>}</button>; })}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+              {userStores.map(s => { const c = getStoreColor(s); const isActive = activeStoreTab === s; const count = byStore[s]?.length || 0; return (
+                <button key={s} onClick={() => setActiveStoreTab(s)} style={{ padding: '6px 12px', borderRadius: 20, border: '1.5px solid', borderColor: isActive ? c.label : c.border, background: isActive ? c.bg : 'var(--bg-white)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <StoreLogo name={s} size={14} />
+                  {count > 0 && <span style={{ fontSize: 11, color: c.label, fontWeight: 600 }}>({count})</span>}
+                </button>
+              ); })}
             </div>
             {activeStoreTab && byStore[activeStoreTab]?.length > 0 && (
               <div>
                 <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: getStoreColor(activeStoreTab).bg, border: '0.5px solid ' + getStoreColor(activeStoreTab).border, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <StoreLogo name={activeStoreTab} size={20} />
-                  <div style={{ fontSize: 14, fontWeight: 700, color: getStoreColor(activeStoreTab).label }}>{byStore[activeStoreTab].length} item{byStore[activeStoreTab].length !== 1 ? 's' : ''}</div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: getStoreColor(activeStoreTab).label }}>{byStore[activeStoreTab].length} item{byStore[activeStoreTab].length !== 1 ? 's' : ''}</span>
                 </div>
                 {byStore[activeStoreTab].map(item => renderItem(item))}
               </div>
             )}
-            {activeStoreTab && (!byStore[activeStoreTab] || byStore[activeStoreTab].length === 0) && <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>Nothing from {activeStoreTab} this week.</div>}
+            {activeStoreTab && (!byStore[activeStoreTab] || byStore[activeStoreTab].length === 0) && (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>Nothing from {activeStoreTab} this week.</div>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── BUDGET SETTINGS SHEET ── */}
+      {/* Settings sheet */}
       {showSettings && (
         <>
           <div onClick={() => setShowSettings(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200 }} />
@@ -526,7 +486,7 @@ export default function GroceryScreen({ store }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 20, fontWeight: 700 }}>$</span>
                 <input type="number" value={monthlyBudget} onChange={e => setPrefs(p => ({ ...p, monthlyBudget: parseFloat(e.target.value) || 0 }))} style={{ fontSize: 24, fontWeight: 700, width: 120 }} />
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>per month · ${(monthlyBudget * 12).toFixed(0)}/year</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>/month · ${(monthlyBudget * 12).toFixed(0)}/year</span>
               </div>
             </div>
             <div style={{ marginBottom: 16 }}>
@@ -547,7 +507,7 @@ export default function GroceryScreen({ store }) {
         </>
       )}
 
-      {/* ── HISTORY SHEET ── */}
+      {/* History sheet */}
       {showHistory && (
         <>
           <div onClick={() => setShowHistory(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200 }} />
@@ -560,48 +520,36 @@ export default function GroceryScreen({ store }) {
               </div>
             </div>
             <div style={{ overflow: 'auto', flex: 1, padding: '16px 20px 32px' }}>
-
-              {/* YTD summary */}
               <div style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '0.5px solid #86efac', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#166534', marginBottom: 4 }}>{currentYear} Year to Date</div>
                 <div style={{ fontSize: 28, fontWeight: 800, color: '#166534' }}>${ytdTotal.toFixed(2)}</div>
-                <div style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>{ytdTrips.length} trips · ${(annualBudget - ytdTotal).toFixed(2)} remaining of ${annualBudget.toFixed(0)} annual budget</div>
+                <div style={{ fontSize: 12, color: '#166534', opacity: 0.8 }}>{ytdTrips.length} trips · ${(annualBudget - ytdTotal).toFixed(2)} remaining of ${annualBudget.toFixed(0)} annual</div>
                 <div style={{ height: 6, background: 'rgba(255,255,255,0.5)', borderRadius: 3, overflow: 'hidden', marginTop: 10 }}>
                   <div style={{ height: '100%', width: Math.min(100, (ytdTotal / annualBudget) * 100) + '%', background: '#16a34a', borderRadius: 3 }} />
                 </div>
               </div>
-
-              {/* Last 3 months */}
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 12 }}>Last 3 months</div>
-              {last3Months.map((month, mi) => {
+              {last3Months.map((month) => {
                 const over = month.total > month.budget;
-                const maxStore = Math.max(...Object.values(month.allStores));
                 return (
                   <div key={month.key} style={{ marginBottom: 20, background: 'var(--bg-white)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-                    {/* Month header */}
                     <div style={{ padding: '14px 16px', borderBottom: '0.5px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <div style={{ fontSize: 15, fontWeight: 700 }}>{month.label}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{month.trips.length} trip{month.trips.length !== 1 ? 's' : ''} · budget ${month.budget}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{month.trips.length} trip{month.trips.length !== 1 ? 's' : ''} · budget ${month.budget}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: over ? 'var(--danger)' : month.total > 0 ? 'var(--green)' : 'var(--text-muted)' }}>
-                          {month.total > 0 ? '$' + month.total.toFixed(2) : '—'}
-                        </div>
-                        {month.total > 0 && <div style={{ fontSize: 11, color: over ? 'var(--danger)' : 'var(--green)' }}>{over ? `$${(month.total - month.budget).toFixed(2)} over` : `$${(month.budget - month.total).toFixed(2)} under`}</div>}
+                        <div style={{ fontSize: 20, fontWeight: 700, color: over ? 'var(--danger)' : month.total > 0 ? 'var(--green)' : 'var(--text-muted)' }}>{month.total > 0 ? '$' + month.total.toFixed(2) : '—'}</div>
+                        {month.total > 0 && <div style={{ fontSize: 11, color: over ? 'var(--danger)' : 'var(--green)' }}>{over ? '$' + (month.total - month.budget).toFixed(2) + ' over' : '$' + (month.budget - month.total).toFixed(2) + ' under'}</div>}
                       </div>
                     </div>
-
                     {month.total > 0 ? (
                       <div style={{ padding: '12px 16px' }}>
-                        {/* Monthly budget bar */}
                         <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden', marginBottom: 14 }}>
                           <div style={{ height: '100%', width: Math.min(100, (month.total / month.budget) * 100) + '%', background: over ? 'var(--danger)' : 'var(--green)', borderRadius: 4 }} />
                         </div>
-                        {/* Store breakdown chart */}
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>By store</div>
-                        <StoreBarChart stores={month.allStores} max={month.total} />
-                        {/* Individual trips */}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>By store</div>
+                        <StoreBarChart stores={month.allStores} total={month.total} />
                         {month.trips.length > 0 && (
                           <div style={{ marginTop: 14, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Trips</div>
