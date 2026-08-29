@@ -12,6 +12,13 @@ const STORE_COLORS = {
   'Other': { bg: '#f4f4f5', border: '#d4d4d8', label: '#52525b', bar: '#71717a' },
 };
 
+function getStoreColor(s) {
+  for (const [key, val] of Object.entries(STORE_COLORS)) {
+    if (s && s.toLowerCase().includes(key.toLowerCase())) return val;
+  }
+  return STORE_COLORS['Other'];
+}
+
 const STORE_DOMAINS = {
   'aldi': 'aldi.us',
   'walmart': 'walmart.com',
