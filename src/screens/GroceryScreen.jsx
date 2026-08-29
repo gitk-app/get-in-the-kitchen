@@ -12,12 +12,86 @@ const STORE_COLORS = {
   'Other': { bg: '#f4f4f5', border: '#d4d4d8', label: '#52525b', bar: '#71717a' },
 };
 
-function getStoreColor(s) {
-  for (const [key, val] of Object.entries(STORE_COLORS)) {
-    if (s && s.toLowerCase().includes(key.toLowerCase())) return val;
+const STORE_DOMAINS = {
+  'aldi': 'aldi.us',
+  'walmart': 'walmart.com',
+  'costco': 'costco.com',
+  "sam's club": 'samsclub.com',
+  "trader joe's": 'traderjoes.com',
+  'kroger': 'kroger.com',
+  'target': 'target.com',
+  'whole foods': 'wholefoodsmarket.com',
+  'publix': 'publix.com',
+  'heb': 'heb.com',
+  'h-e-b': 'heb.com',
+  'winn dixie': 'winndixie.com',
+  'winn-dixie': 'winndixie.com',
+  'meijer': 'meijer.com',
+  'wegmans': 'wegmans.com',
+  'sprouts': 'sprouts.com',
+  'food lion': 'foodlion.com',
+  'giant': 'giantfood.com',
+  'stop & shop': 'stopandshop.com',
+  'safeway': 'safeway.com',
+  'albertsons': 'albertsons.com',
+  'smith\'s': 'smithsfoodanddrug.com',
+  'fred meyer': 'fredmeyer.com',
+  'ralphs': 'ralphs.com',
+  'harris teeter': 'harristeeter.com',
+  'price chopper': 'pricechopper.com',
+  'hy-vee': 'hy-vee.com',
+  'piggly wiggly': 'pigglywiggly.com',
+  'food city': 'foodcity.com',
+  'ingles': 'ingles-markets.com',
+  'brookshire': 'brookshires.com',
+  'stater bros': 'staterbros.com',
+  'winco': 'wincofoods.com',
+  'market basket': 'marketbasket.com',
+  'price rite': 'priceritemarketplace.com',
+  'lidl': 'lidl.com',
+  'aldi nord': 'aldi.com',
+};
+
+function getStoreDomain(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  for (const [key, domain] of Object.entries(STORE_DOMAINS)) {
+    if (lower.includes(key)) return domain;
   }
-  return STORE_COLORS['Other'];
+  // Try to guess domain from name for custom stores
+  const slug = lower.replace(/[^a-z0-9]/g, '');
+  return slug + '.com';
 }
+
+function StoreLogo({ name, size = 18, style = {} }) {
+  const [failed, setFailed] = React.useState(false);
+  const domain = getStoreDomain(name);
+  const sc = getStoreColor(name);
+
+  if (failed || !domain) {
+    return (
+      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: sc.bg, color: sc.label, border: '0.5px solid ' + sc.border, ...style }}>
+        {name}
+      </span>
+    );
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: sc.bg, border: '0.5px solid ' + sc.border, borderRadius: 6, padding: '2px 8px', ...style }}>
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+        alt={name}
+        width={size}
+        height={size}
+        style={{ borderRadius: 3, objectFit: 'contain' }}
+        onError={() => setFailed(true)}
+      />
+      <span style={{ fontSize: 11, fontWeight: 600, color: sc.label }}>{name}</span>
+    </span>
+  );
+}
+
+
 
 const FREQ_OPTIONS = [
   { value: 'weekly', label: 'Weekly', trips: 4 },
@@ -236,8 +310,9 @@ export default function GroceryScreen({ store }) {
             <div style={{ fontSize: 14, fontWeight: 500, textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>{item.name}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 3, flexWrap: 'wrap', alignItems: 'center' }}>
               <span onClick={() => setEditingStore(isEditingThis ? null : item.name + item.source)}
-                style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3, background: sc ? sc.bg : 'var(--surface)', color: sc ? sc.label : 'var(--text-muted)', border: '0.5px solid ' + (sc ? sc.border : 'var(--border)') }}>
-                {currentStore || 'No store'} <span style={{ fontSize: 9 }}>▼</span>
+                style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <StoreLogo name={currentStore || 'No store'} size={14} />
+                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>▼</span>
               </span>
               {item.source === 'pantry' && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Running low</span>}
               {item.qty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.qty}</span>}
@@ -324,7 +399,7 @@ export default function GroceryScreen({ store }) {
             const sc = getStoreColor(s);
             return (
               <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 4, fontWeight: 600, background: sc.bg, color: sc.label, border: '0.5px solid ' + sc.border, minWidth: 80, textAlign: 'center' }}>{s}</span>
+                <span style={{ flexShrink: 0 }}><StoreLogo name={s} size={16} /></span>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-muted)' }}>$</span>
                   <input type="number" step="0.01" placeholder="0.00" value={storeTotals[s] || ''}
@@ -416,12 +491,13 @@ export default function GroceryScreen({ store }) {
         {view === 'by-store' && (
           <div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-              {userStores.map(s => { const c = getStoreColor(s); const isActive = activeStoreTab === s; const count = byStore[s]?.length || 0; return <button key={s} onClick={() => setActiveStoreTab(s)} style={{ padding: '7px 14px', borderRadius: 20, border: '1.5px solid', borderColor: isActive ? c.label : c.border, background: isActive ? c.bg : 'var(--bg-white)', color: isActive ? c.label : 'var(--text-secondary)', fontSize: 13, fontWeight: isActive ? 700 : 400, cursor: 'pointer' }}>{s} {count > 0 ? `(${count})` : ''}</button>; })}
+              {userStores.map(s => { const c = getStoreColor(s); const isActive = activeStoreTab === s; const count = byStore[s]?.length || 0; return <button key={s} onClick={() => setActiveStoreTab(s)} style={{ padding: '6px 12px', borderRadius: 20, border: '1.5px solid', borderColor: isActive ? c.label : c.border, background: isActive ? c.bg : 'var(--bg-white)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><StoreLogo name={s} size={14} />{count > 0 && <span style={{ fontSize: 11, color: isActive ? c.label : 'var(--text-muted)', fontWeight: 600 }}>({count})</span>}</button>; })}
             </div>
             {activeStoreTab && byStore[activeStoreTab]?.length > 0 && (
               <div>
-                <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: getStoreColor(activeStoreTab).bg, border: '0.5px solid ' + getStoreColor(activeStoreTab).border }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: getStoreColor(activeStoreTab).label }}>{activeStoreTab} · {byStore[activeStoreTab].length} items</div>
+                <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: getStoreColor(activeStoreTab).bg, border: '0.5px solid ' + getStoreColor(activeStoreTab).border, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <StoreLogo name={activeStoreTab} size={20} />
+                  <div style={{ fontSize: 14, fontWeight: 700, color: getStoreColor(activeStoreTab).label }}>{byStore[activeStoreTab].length} item{byStore[activeStoreTab].length !== 1 ? 's' : ''}</div>
                 </div>
                 {byStore[activeStoreTab].map(item => renderItem(item))}
               </div>
