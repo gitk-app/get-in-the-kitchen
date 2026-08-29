@@ -64,7 +64,7 @@ function getStoreDomain(name) {
 }
 
 function StoreLogo({ name, size = 18, style = {} }) {
-  const [failed, setFailed] = React.useState(false);
+  const [failed, setFailed] = useState(false);
   const domain = getStoreDomain(name);
   const sc = getStoreColor(name);
 
