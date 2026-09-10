@@ -300,53 +300,37 @@ Respond ONLY with this exact JSON structure, no other text:
                     return (
                       <td key={slot}>
                         {meal ? (
-                          <div className="meal-cell-filled" style={{ padding: 0, overflow: 'hidden' }}>
-                            {/* Photo thumbnail */}
-                            {meal.image ? (
-                              <div style={{ height: 52, overflow: 'hidden', position: 'relative' }}
-                                onClick={() => setRecipeView(meal.id)}>
-                                <img src={meal.image} alt={meal.name}
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
-                                  onError={e => e.target.style.display = 'none'}
-                                />
-                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.55) 100%)' }} />
-                                <div style={{ position: 'absolute', bottom: 4, left: 6, right: 24, fontSize: 9, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{meal.name}</div>
-                                <div style={{ position: 'absolute', bottom: 4, right: 4 }}>
-                                  <span className="meal-cell-change" style={{ background: 'rgba(255,255,255,0.85)' }} onClick={e => { e.stopPropagation(); openPicker(day, slot); }}>swap</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div style={{ padding: 8 }}>
-                                <div className="meal-cell-name" onClick={() => {
-                                  setRecipeView(meal.id);
-                                  // Auto-fetch image if none exists
-                                  if (unsplashKey && !meal.image) {
-                                    fetchMealImage(meal.name, unsplashKey).then(url => {
-                                      if (url) updateMeal(meal.id, { image: url });
-                                    });
-                                  }
-                                }}>{meal.name}</div>
-                                <div className="meal-cell-meta">
-                                  <span>${meal.cost.toFixed(2)}{meal.prepTime ? ' · ' + meal.prepTime + 'm' : ''}</span>
-                                  <span className="meal-cell-change" onClick={() => openPicker(day, slot)}>swap</span>
-                                </div>
-                              </div>
+                          <div className="meal-cell-filled">
+                            {/* Full cell photo */}
+                            {meal.image && (
+                              <img src={meal.image} alt={meal.name}
+                                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={e => e.target.style.display = 'none'}
+                              />
                             )}
-                            {/* Batch tags */}
-                            {(meal.batchCook || (meal.fromBatch && meal.batchSource)) && (
-                              <div style={{ padding: '2px 6px 4px' }}>
-                                {meal.batchCook && (
-                                  <div style={{ fontSize: 9, color: '#7A5A10', background: '#FFFAEF', border: '0.5px solid #C9A84C', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 700 }}>
-                                    🍳 BATCH COOK
-                                  </div>
-                                )}
-                                {meal.fromBatch && meal.batchSource && (
-                                  <div style={{ fontSize: 9, color: '#0A5A45', background: '#E8F5F1', border: '0.5px solid #7EC8B5', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 600 }}>
-                                    ↩ from {meal.batchSource}
-                                  </div>
-                                )}
+                            {/* Dark gradient overlay */}
+                            <div style={{ position: 'absolute', inset: 0, background: meal.image ? 'linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.65) 100%)' : 'transparent' }} />
+                            {/* Content overlay */}
+                            <div style={{ position: 'absolute', inset: 0, padding: '6px 6px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+                              onClick={() => {
+                                setRecipeView(meal.id);
+                                if (unsplashKey && !meal.image) {
+                                  fetchMealImage(meal.name, unsplashKey).then(url => { if (url) updateMeal(meal.id, { image: url }); });
+                                }
+                              }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.2, color: meal.image ? '#fff' : 'var(--text)', marginBottom: 2, textShadow: meal.image ? '0 1px 3px rgba(0,0,0,0.8)' : 'none' }}>{meal.name}</div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                  {meal.batchCook && (
+                                    <span style={{ fontSize: 8, color: '#7A5A10', background: 'rgba(255,250,239,0.95)', border: '0.5px solid #C9A84C', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>🍳 BATCH</span>
+                                  )}
+                                  {meal.fromBatch && meal.batchSource && (
+                                    <span style={{ fontSize: 8, color: '#0A5A45', background: 'rgba(232,245,241,0.95)', border: '0.5px solid #7EC8B5', borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>↩ {meal.batchSource.replace(' dinner', '')}</span>
+                                  )}
+                                </div>
+                                <span className="meal-cell-change" style={{ background: 'rgba(255,255,255,0.9)', flexShrink: 0 }} onClick={e => { e.stopPropagation(); openPicker(day, slot); }}>swap</span>
                               </div>
-                            )}
+                            </div>
                           </div>
                         ) : (
                           <div className="meal-cell-empty" onClick={() => openPicker(day, slot)}>+</div>
