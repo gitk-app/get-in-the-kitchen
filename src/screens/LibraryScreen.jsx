@@ -2,8 +2,19 @@ import React, { useState } from 'react';
 import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { MEAL_SLOTS } from '../data/meals';
 
-// Each ingredient is now {n: name, s: store}
-// Store is optional — defaults to ''
+// Unsplash image fetcher — searches by meal name
+async function fetchMealImage(mealName, apiKey) {
+  if (!apiKey) return null;
+  try {
+    const query = encodeURIComponent(mealName + ' food meal');
+    const res = await fetch(
+      `https://api.unsplash.com/search/photos?query=${query}&per_page=1&orientation=landscape`,
+      { headers: { Authorization: `Client-ID ${apiKey}` } }
+    );
+    const data = await res.json();
+    return data.results?.[0]?.urls?.small || null;
+  } catch { return null; }
+}
 function IngredientRow({ item, index, onChange, onRemove, stores }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -32,7 +43,7 @@ function IngredientRow({ item, index, onChange, onRemove, stores }) {
 }
 
 export default function LibraryScreen({ store }) {
-  const { meals, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals, pantry, prefs } = store;
+  const { meals, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals, pantry, prefs, unsplashKey } = store;
 
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
@@ -92,8 +103,15 @@ export default function LibraryScreen({ store }) {
     const items = ingredientRows.filter(r => r.n.trim()).map(r => ({ n: r.n.trim(), s: r.s || '' }));
     const stepList = steps ? steps.split('\n').map(x => x.trim()).filter(Boolean) : [];
     const newId = 'm' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-    const nm = { id: newId, name: name.trim(), slot, cost: parseFloat(cost) || 0, protein: 'none', items, steps: stepList, prepTime: 0, favorite: false };
+    const nm = { id: newId, name: name.trim(), slot, cost: parseFloat(cost) || 0, protein: 'none', items, steps: stepList, prepTime: 0, favorite: false, image: null };
     store.setMeals(prev => [...prev, nm]);
+
+    // Fetch image from Unsplash in background
+    if (unsplashKey) {
+      fetchMealImage(name.trim(), unsplashKey).then(imageUrl => {
+        if (imageUrl) store.setMeals(prev => prev.map(m => m.id === newId ? { ...m, image: imageUrl } : m));
+      });
+    }
 
     // Cross-check pantry
     if (items.length > 0) {
@@ -138,7 +156,17 @@ export default function LibraryScreen({ store }) {
             <div key={s} className="mb-16">
               <SectionLabel>{s}</SectionLabel>
               {items.map(m => (
-                <div key={m.id} className="card mb-8" style={{ padding: '12px 14px' }}>
+                <div key={m.id} className="card mb-8" style={{ padding: 0, overflow: 'hidden' }}>
+                  {m.image && (
+                    <div style={{ height: 100, overflow: 'hidden', cursor: 'pointer' }}
+                      onClick={() => { setGenerateError(''); setRecipeView(m.id); }}>
+                      <img src={m.image} alt={m.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => e.target.style.display = 'none'}
+                      />
+                    </div>
+                  )}
+                  <div style={{ padding: '12px 14px' }}>
                   <div className="flex justify-between items-start">
                     <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => { setGenerateError(''); setRecipeView(m.id); }}>
                       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>{m.name}</div>
@@ -146,7 +174,7 @@ export default function LibraryScreen({ store }) {
                         {m.cost > 0 && <span className="text-xs text-muted">~${m.cost.toFixed(2)}</span>}
                         {m.prepTime > 0 && <span className="text-xs text-muted">{m.prepTime} min</span>}
                         {m.steps?.length > 0
-                          ? <span className="text-xs" style={{ color: 'var(--green)' }}><Icon name="check" size={11} /> {m.steps.length} steps</span>
+                          ? <span className="text-xs" style={{ color: 'var(--teal)' }}><Icon name="check" size={11} /> {m.steps.length} steps</span>
                           : <span className="text-xs text-muted">No steps yet · tap to generate</span>}
                       </div>
                       {m.items?.length > 0 && <div className="text-xs text-muted">{m.items.slice(0, 3).map(it => it.n).join(', ')}</div>}
@@ -154,13 +182,14 @@ export default function LibraryScreen({ store }) {
                     <div className="flex items-center gap-8">
                       <button onClick={() => toggleFavorite(m.id)}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>
-                        <Icon name={m.favorite ? 'star-filled' : 'star'} size={18} style={{ color: m.favorite ? '#eab308' : 'var(--text-muted)' }} />
+                        <Icon name={m.favorite ? 'star-filled' : 'star'} size={18} style={{ color: m.favorite ? '#C9A84C' : 'var(--text-muted)' }} />
                       </button>
                       <button onClick={() => removeMeal(m.id)}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
                         <Icon name="trash" size={16} />
                       </button>
                     </div>
+                  </div>
                   </div>
                 </div>
               ))}
@@ -213,6 +242,14 @@ export default function LibraryScreen({ store }) {
       {/* Recipe view sheet */}
       {recipe && (
         <Sheet onClose={() => { setRecipeView(null); setGenerateError(''); }} title={recipe.name}>
+          {recipe.image && (
+            <div style={{ height: 180, overflow: 'hidden', margin: '0 0 0' }}>
+              <img src={recipe.image} alt={recipe.name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => e.target.style.display = 'none'}
+              />
+            </div>
+          )}
           <div style={{ padding: '12px 16px' }}>
             <div className="flex gap-12 mb-12 flex-wrap">
               {recipe.prepTime > 0 && <span className="text-sm text-muted"><Icon name="clock" size={14} /> {recipe.prepTime} min</span>}

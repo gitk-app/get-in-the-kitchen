@@ -8,6 +8,7 @@ const KEYS = {
   budget: 'gitk_budget',
   actuals: 'gitk_actuals',
   apiKey: 'gitk_api_key',
+  unsplashKey: 'gitk_unsplash_key',
   onboarded: 'gitk_onboarded',
   prefs: 'gitk_prefs',
 };
@@ -28,6 +29,7 @@ export default function useStore() {
   const [budget, _setBudget] = useState(() => loadItem(KEYS.budget, 92));
   const [actuals, _setActuals] = useState(() => loadItem(KEYS.actuals, {}));
   const [apiKey, _setApiKey] = useState(() => localStorage.getItem(KEYS.apiKey) || '');
+  const [unsplashKey, _setUnsplashKey] = useState(() => localStorage.getItem(KEYS.unsplashKey) || '');
   const [onboarded, _setOnboarded] = useState(() => loadItem(KEYS.onboarded, false));
   const [prefs, _setPrefs] = useState(() => loadItem(KEYS.prefs, { householdSize: '2', dietary: [], stores: ['Aldi', 'Walmart', 'Costco'] }));
   const [activeWeek, setActiveWeek] = useState(0);
@@ -62,6 +64,7 @@ export default function useStore() {
   const setBudget = useCallback((v) => { _setBudget(v); saveItem(KEYS.budget, v); }, []);
   const setActuals = useCallback((v) => { const val = typeof v === 'function' ? v(actuals) : v; _setActuals(val); saveItem(KEYS.actuals, val); }, [actuals]);
   const setApiKey = useCallback((v) => { _setApiKey(v); localStorage.setItem(KEYS.apiKey, v); }, []);
+  const setUnsplashKey = useCallback((v) => { _setUnsplashKey(v); localStorage.setItem(KEYS.unsplashKey, v); }, []);
   const setOnboarded = useCallback((v) => { _setOnboarded(v); saveItem(KEYS.onboarded, v); }, []);
   const setPrefs = useCallback((v) => { const val = typeof v === 'function' ? v(prefs) : v; _setPrefs(val); saveItem(KEYS.prefs, val); }, [prefs]);
 
@@ -169,7 +172,7 @@ export default function useStore() {
     pantry, setPantry, addPantryItem, removePantryItem, restockPantryItem,
     budget, setBudget,
     actuals, setActuals,
-    apiKey, setApiKey,
+    apiKey, setApiKey, unsplashKey, setUnsplashKey,
     onboarded, setOnboarded,
     prefs, setPrefs,
     apiFetch,
