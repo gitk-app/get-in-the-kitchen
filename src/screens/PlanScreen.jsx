@@ -289,12 +289,12 @@ Respond ONLY with this exact JSON structure, no other text:
                               <span className="meal-cell-change" onClick={() => openPicker(day, slot)}>swap</span>
                             </div>
                             {meal.batchCook && (
-                              <div style={{ fontSize: 9, marginTop: 3, color: '#166534', background: '#dcfce7', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 700 }}>
+                              <div style={{ fontSize: 9, marginTop: 3, color: '#7A5A10', background: '#FFFAEF', border: '0.5px solid #C9A84C', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 700 }}>
                                 🍳 BATCH COOK
                               </div>
                             )}
                             {meal.fromBatch && meal.batchSource && (
-                              <div style={{ fontSize: 9, marginTop: 3, color: '#1e40af', background: '#dbeafe', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 600 }}>
+                              <div style={{ fontSize: 9, marginTop: 3, color: '#0A5A45', background: '#E8F5F1', border: '0.5px solid #7EC8B5', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 600 }}>
                                 ↩ from {meal.batchSource}
                               </div>
                             )}
