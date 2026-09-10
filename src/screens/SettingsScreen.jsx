@@ -96,12 +96,12 @@ export default function SettingsScreen({ store }) {
 
   // Preference summary rows — option C with Tabler icons + accent bars
   const prefRows = [
-    { key: 'household', label: 'Household size', value: HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.label || '2 people', icon: 'home', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
-    { key: 'dietary', label: 'Dietary needs', value: prefs?.dietary?.length ? prefs.dietary.join(', ') : 'No restrictions', icon: 'apple', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
-    { key: 'stores', label: 'Your stores', value: prefs?.stores?.length ? prefs.stores.join(', ') : 'None selected', icon: 'map-pin', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
-    { key: 'budget', label: 'Budget & shopping', value: `$${monthlyBudget}/month · $${perTrip}/trip`, icon: 'coin', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
-    { key: 'proteins', label: 'Proteins you buy', value: prefs?.proteins?.length ? prefs.proteins.join(', ') : 'No preference', icon: 'flame', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
-    { key: 'mealtypes', label: 'Meal types', value: prefs?.mealTypes?.length ? prefs.mealTypes.map(t => MEAL_TYPES.find(m => m.value === t)?.label?.split(' ').slice(1).join(' ') || t).join(', ') : 'No preference', icon: 'chef-hat', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
+    { key: 'household', label: 'Household size', value: HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.label || '2 people', initial: 'H', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
+    { key: 'dietary', label: 'Dietary needs', value: prefs?.dietary?.length ? prefs.dietary.join(', ') : 'No restrictions', initial: 'D', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
+    { key: 'stores', label: 'Your stores', value: prefs?.stores?.length ? prefs.stores.join(', ') : 'None selected', initial: 'S', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
+    { key: 'budget', label: 'Budget & shopping', value: `$${monthlyBudget}/month · $${perTrip}/trip`, initial: 'B', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
+    { key: 'proteins', label: 'Proteins you buy', value: prefs?.proteins?.length ? prefs.proteins.join(', ') : 'No preference', initial: 'P', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
+    { key: 'mealtypes', label: 'Meal types', value: prefs?.mealTypes?.length ? prefs.mealTypes.map(t => MEAL_TYPES.find(m => m.value === t)?.label?.split(' ').slice(1).join(' ') || t).join(', ') : 'No preference', initial: 'M', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
   ];
 
   return (
@@ -147,7 +147,7 @@ export default function SettingsScreen({ store }) {
               style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: i < prefRows.length - 1 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer', position: 'relative' }}>
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: row.accent, borderRadius: '0 2px 2px 0' }} />
               <div style={{ width: 34, height: 34, borderRadius: 9, background: row.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
-                <Icon name={row.icon} size={17} style={{ color: row.iconColor }} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: row.iconColor, fontFamily: '-apple-system, sans-serif' }}>{row.initial}</span>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{row.label}</div>
