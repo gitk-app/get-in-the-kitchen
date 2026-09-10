@@ -345,10 +345,42 @@ export default function SettingsScreen({ store }) {
       {editSheet === 'mealtypes' && (
         <EditSheet title="Meal types" onClose={() => setEditSheet(null)}>
           <p className="text-sm mb-16">What does your household like to eat?</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {MEAL_TYPES.map(t => (
               <Pill key={t.value} selected={prefs?.mealTypes?.includes(t.value)} onClick={() => toggleMealType(t.value)}>{t.label}</Pill>
             ))}
+            {/* Custom meal types */}
+            {(prefs?.mealTypes || []).filter(t => !MEAL_TYPES.find(m => m.value === t)).map(t => (
+              <div key={t} onClick={() => toggleMealType(t)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 24, fontSize: 13, fontWeight: 600, background: 'var(--teal-light)', color: 'var(--teal)', border: '1.5px solid var(--teal)', cursor: 'pointer' }}>
+                {t} <span style={{ fontSize: 11, opacity: 0.7 }}>✕</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 12, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Add your own:</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                id="settings-meal-type-input"
+                placeholder="e.g. Nigerian food, Mediterranean..."
+                style={{ flex: 1, height: 36, fontSize: 13 }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && e.target.value.trim()) {
+                    const val = e.target.value.trim();
+                    setPrefs(p => ({ ...p, mealTypes: [...(p.mealTypes || []), val] }));
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <button onClick={() => {
+                const input = document.getElementById('settings-meal-type-input');
+                const val = input?.value?.trim();
+                if (val) {
+                  setPrefs(p => ({ ...p, mealTypes: [...(p.mealTypes || []), val] }));
+                  input.value = '';
+                }
+              }} style={{ background: 'var(--teal)', color: '#C9A84C', border: 'none', borderRadius: 8, padding: '0 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Add</button>
+            </div>
           </div>
           <Button variant="primary" onClick={() => setEditSheet(null)}>Save</Button>
         </EditSheet>
