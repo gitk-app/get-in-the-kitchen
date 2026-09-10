@@ -76,7 +76,7 @@ export default function OnboardingScreen({ store }) {
       weekType,
       proteins,
       mealTypes,
-      customStores: [],
+      customStores: stores.filter(s => !STORES.includes(s)),
     });
     setOnboarded(true);
   };
@@ -156,13 +156,55 @@ export default function OnboardingScreen({ store }) {
               <div style={{
                 width: 24, height: 24, borderRadius: 7,
                 border: stores.includes(s) ? 'none' : '1.5px solid var(--border)',
-                background: stores.includes(s) ? 'var(--green)' : 'transparent',
+                background: stores.includes(s) ? 'var(--teal)' : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s'
               }}>
                 {stores.includes(s) && <span style={{ color: '#fff', fontSize: 14, lineHeight: 1 }}>✓</span>}
               </div>
             </div>
           ))}
+          {/* Custom stores added by user */}
+          {stores.filter(s => !STORES.includes(s)).map(s => (
+            <div key={s} className="flex justify-between items-center"
+              style={{ padding: '14px 0', borderBottom: '0.5px solid var(--border)' }}>
+              <span style={{ fontSize: 15, fontWeight: 500 }}>{s}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => setStores(p => p.filter(x => x !== s))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16 }}>✕</button>
+                <div style={{ width: 24, height: 24, borderRadius: 7, background: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: '#fff', fontSize: 14 }}>✓</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {/* Add other store */}
+          <div style={{ padding: '14px 0', borderBottom: '0.5px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Don't see your store? Add it:</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                placeholder="e.g. HEB, Publix, Food Lion"
+                id="custom-store-input"
+                style={{ flex: 1, height: 40, fontSize: 14 }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && e.target.value.trim()) {
+                    const name = e.target.value.trim();
+                    if (!stores.includes(name)) setStores(p => [...p, name]);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <button onClick={() => {
+                const input = document.getElementById('custom-store-input');
+                const name = input?.value?.trim();
+                if (name && !stores.includes(name)) {
+                  setStores(p => [...p, name]);
+                  input.value = '';
+                }
+              }} style={{ background: 'var(--teal)', color: '#C9A84C', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                Add
+              </button>
+            </div>
+          </div>
         </div>
       ),
     },
