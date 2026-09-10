@@ -55,7 +55,8 @@ export default function PlanScreen({ store }) {
 
   const total = planTotal();
   const mTotal = monthlyTotal();
-  const mBudget = budget * 4;
+  const mBudget = prefs?.monthlyBudget || budget * 4;
+  const weeklyBudget = Math.round(mBudget / 4);
   const wkStart = getWeekStart(activeWeek);
 
   const freshUrgent = pantry.filter(p => p.fresh).map(p => ({ ...p, age: daysOld(p.addedAt) })).filter(p => p.age >= 2);
@@ -254,7 +255,7 @@ Respond ONLY with this exact JSON structure, no other text:
 
         {/* Budget */}
         <div className="card mb-12">
-          <BudgetBar spent={total} budget={budget} />
+          <BudgetBar spent={total} budget={weeklyBudget} />
         </div>
 
         {/* Controls */}
