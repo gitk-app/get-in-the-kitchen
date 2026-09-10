@@ -187,6 +187,24 @@ Respond ONLY with this exact JSON structure, no other text:
 
       // Generate steps in background for new meals
       newMealRecords.forEach(m => generateSteps(m.id, m.name, m.slot));
+
+      // Fetch photos for ALL meals in the plan in the background
+      if (unsplashKey) {
+        const allPlannedMeals = Object.values(newPlan).flatMap(day => Object.values(day));
+        const uniqueIds = [...new Set(allPlannedMeals)];
+        const allMeals = [...store.mealsRef.current, ...newMealRecords];
+
+        // Stagger requests so we don't hammer the API
+        uniqueIds.forEach((id, i) => {
+          const meal = allMeals.find(m => m.id === id);
+          if (!meal || meal.image) return;
+          setTimeout(() => {
+            fetchMealImage(meal.name, unsplashKey).then(url => {
+              if (url) updateMeal(id, { image: url });
+            });
+          }, i * 300); // 300ms between each request
+        });
+      }
     } catch (e) {
       setBuilding(false);
       alert('Could not build the week. Check your API key and try again.');
