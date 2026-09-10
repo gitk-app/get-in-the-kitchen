@@ -96,80 +96,56 @@ export default function SettingsScreen({ store }) {
 
   // Preference summary rows — option C with Tabler icons + accent bars
   const prefRows = [
-    {
-      key: 'household',
-      label: 'Household size',
-      value: HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.label || '2 people',
-      icon: 'users',
-      accent: '#0A7A65',
-      iconBg: '#E8F5F1',
-      iconColor: '#0A5A45',
-    },
-    {
-      key: 'dietary',
-      label: 'Dietary needs',
-      value: prefs?.dietary?.length ? prefs.dietary.join(', ') : 'No restrictions',
-      icon: 'leaf',
-      accent: '#C9A84C',
-      iconBg: '#FFFAEF',
-      iconColor: '#7A5A10',
-    },
-    {
-      key: 'stores',
-      label: 'Your stores',
-      value: prefs?.stores?.length ? prefs.stores.join(', ') : 'None selected',
-      icon: 'shopping-bag',
-      accent: '#0A7A65',
-      iconBg: '#E8F5F1',
-      iconColor: '#0A5A45',
-    },
-    {
-      key: 'budget',
-      label: 'Budget & shopping',
-      value: `$${monthlyBudget}/month · $${perTrip}/trip`,
-      icon: 'wallet',
-      accent: '#C9A84C',
-      iconBg: '#FFFAEF',
-      iconColor: '#7A5A10',
-    },
-    {
-      key: 'proteins',
-      label: 'Proteins you buy',
-      value: prefs?.proteins?.length ? prefs.proteins.join(', ') : 'No preference',
-      icon: 'meat',
-      accent: '#0A7A65',
-      iconBg: '#E8F5F1',
-      iconColor: '#0A5A45',
-    },
-    {
-      key: 'mealtypes',
-      label: 'Meal types',
-      value: prefs?.mealTypes?.length ? prefs.mealTypes.map(t => MEAL_TYPES.find(m => m.value === t)?.label?.split(' ').slice(1).join(' ') || t).join(', ') : 'No preference',
-      icon: 'bowl-chopsticks',
-      accent: '#C9A84C',
-      iconBg: '#FFFAEF',
-      iconColor: '#7A5A10',
-    },
+    { key: 'household', label: 'Household size', value: HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.label || '2 people', icon: 'home', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
+    { key: 'dietary', label: 'Dietary needs', value: prefs?.dietary?.length ? prefs.dietary.join(', ') : 'No restrictions', icon: 'apple', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
+    { key: 'stores', label: 'Your stores', value: prefs?.stores?.length ? prefs.stores.join(', ') : 'None selected', icon: 'map-pin', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
+    { key: 'budget', label: 'Budget & shopping', value: `$${monthlyBudget}/month · $${perTrip}/trip`, icon: 'coin', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
+    { key: 'proteins', label: 'Proteins you buy', value: prefs?.proteins?.length ? prefs.proteins.join(', ') : 'No preference', icon: 'flame', accent: '#0A7A65', iconBg: '#E8F5F1', iconColor: '#0A5A45' },
+    { key: 'mealtypes', label: 'Meal types', value: prefs?.mealTypes?.length ? prefs.mealTypes.map(t => MEAL_TYPES.find(m => m.value === t)?.label?.split(' ').slice(1).join(' ') || t).join(', ') : 'No preference', icon: 'chef-hat', accent: '#C9A84C', iconBg: '#FFFAEF', iconColor: '#7A5A10' },
   ];
 
   return (
     <div className="screen">
-      <div className="screen-header">
-        <span className="screen-title">Settings</span>
+      {/* ── TEAL HERO HEADER ── */}
+      <div style={{ background: '#0A3D35', padding: '20px 24px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 40, height: 40, background: '#C9A84C', borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="chef-hat" size={20} style={{ color: '#0A3D35' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>GET IN THE KITCHEN</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>Real meals. Real budget. Real life.</div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Monthly budget</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>${monthlyBudget}</div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>${perTrip}/trip</div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Household</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>{HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.value?.replace('-', '–') || '2'}</div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>people</div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Stores</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>{prefs?.stores?.length || 0}</div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prefs?.stores?.slice(0,2).join(', ') || 'None set'}</div>
+          </div>
+        </div>
       </div>
-      <div className="screen-padded">
 
+      <div className="screen-padded">
         {/* ── PREFERENCES SECTION ── */}
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10, marginTop: 4 }}>
           My preferences
         </div>
         <div className="card mb-20" style={{ padding: 0, overflow: 'hidden' }}>
           {prefRows.map((row, i) => (
             <div key={row.key} onClick={() => setEditSheet(row.key)}
               style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: i < prefRows.length - 1 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer', position: 'relative' }}>
-              {/* Colored left accent bar */}
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: row.accent, borderRadius: '0 2px 2px 0' }} />
-              {/* Icon with tinted background */}
               <div style={{ width: 34, height: 34, borderRadius: 9, background: row.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
                 <Icon name={row.icon} size={17} style={{ color: row.iconColor }} />
               </div>
