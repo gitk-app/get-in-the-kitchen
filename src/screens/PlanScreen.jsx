@@ -3,6 +3,24 @@ import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { DAYS, PLAN_SLOTS, PROTEIN_OPTIONS } from '../data/meals';
 
+// Fetch food photo from Pexels
+async function fetchMealImage(mealName, apiKey) {
+  if (!apiKey) return null;
+  try {
+    const query = encodeURIComponent(mealName + ' food');
+    const res = await fetch(
+      `https://api.pexels.com/v1/search?query=${query}&per_page=5&orientation=landscape`,
+      { headers: { Authorization: apiKey } }
+    );
+    const data = await res.json();
+    const photos = data.photos || [];
+    if (!photos.length) return null;
+    const top = photos.slice(0, 3);
+    const pick = top[Math.floor(Math.random() * top.length)];
+    return pick.src?.medium || null;
+  } catch { return null; }
+}
+
 const getMostRecentSunday = () => {
   const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0); return d;
 };
@@ -18,7 +36,7 @@ const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
 export default function PlanScreen({ store }) {
   const { meals, currentPlan, activeWeek, setActiveWeek, setMealInPlan, setBulkPlan, clearWeek,
-    planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal, prefs } = store;
+    planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal, prefs, unsplashKey } = store;
 
   const [picker, setPicker] = useState(null);
   const [browseAll, setBrowseAll] = useState(false);
@@ -282,20 +300,51 @@ Respond ONLY with this exact JSON structure, no other text:
                     return (
                       <td key={slot}>
                         {meal ? (
-                          <div className="meal-cell-filled">
-                            <div className="meal-cell-name" onClick={() => setRecipeView(meal.id)}>{meal.name}</div>
-                            <div className="meal-cell-meta">
-                              <span>${meal.cost.toFixed(2)}{meal.prepTime ? ' · ' + meal.prepTime + 'm' : ''}</span>
-                              <span className="meal-cell-change" onClick={() => openPicker(day, slot)}>swap</span>
-                            </div>
-                            {meal.batchCook && (
-                              <div style={{ fontSize: 9, marginTop: 3, color: '#7A5A10', background: '#FFFAEF', border: '0.5px solid #C9A84C', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 700 }}>
-                                🍳 BATCH COOK
+                          <div className="meal-cell-filled" style={{ padding: 0, overflow: 'hidden' }}>
+                            {/* Photo thumbnail */}
+                            {meal.image ? (
+                              <div style={{ height: 52, overflow: 'hidden', position: 'relative' }}
+                                onClick={() => setRecipeView(meal.id)}>
+                                <img src={meal.image} alt={meal.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                  onError={e => e.target.style.display = 'none'}
+                                />
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.55) 100%)' }} />
+                                <div style={{ position: 'absolute', bottom: 4, left: 6, right: 24, fontSize: 9, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{meal.name}</div>
+                                <div style={{ position: 'absolute', bottom: 4, right: 4 }}>
+                                  <span className="meal-cell-change" style={{ background: 'rgba(255,255,255,0.85)' }} onClick={e => { e.stopPropagation(); openPicker(day, slot); }}>swap</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ padding: 8 }}>
+                                <div className="meal-cell-name" onClick={() => {
+                                  setRecipeView(meal.id);
+                                  // Auto-fetch image if none exists
+                                  if (unsplashKey && !meal.image) {
+                                    fetchMealImage(meal.name, unsplashKey).then(url => {
+                                      if (url) updateMeal(meal.id, { image: url });
+                                    });
+                                  }
+                                }}>{meal.name}</div>
+                                <div className="meal-cell-meta">
+                                  <span>${meal.cost.toFixed(2)}{meal.prepTime ? ' · ' + meal.prepTime + 'm' : ''}</span>
+                                  <span className="meal-cell-change" onClick={() => openPicker(day, slot)}>swap</span>
+                                </div>
                               </div>
                             )}
-                            {meal.fromBatch && meal.batchSource && (
-                              <div style={{ fontSize: 9, marginTop: 3, color: '#0A5A45', background: '#E8F5F1', border: '0.5px solid #7EC8B5', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 600 }}>
-                                ↩ from {meal.batchSource}
+                            {/* Batch tags */}
+                            {(meal.batchCook || (meal.fromBatch && meal.batchSource)) && (
+                              <div style={{ padding: '2px 6px 4px' }}>
+                                {meal.batchCook && (
+                                  <div style={{ fontSize: 9, color: '#7A5A10', background: '#FFFAEF', border: '0.5px solid #C9A84C', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 700 }}>
+                                    🍳 BATCH COOK
+                                  </div>
+                                )}
+                                {meal.fromBatch && meal.batchSource && (
+                                  <div style={{ fontSize: 9, color: '#0A5A45', background: '#E8F5F1', border: '0.5px solid #7EC8B5', borderRadius: 3, padding: '1px 5px', display: 'inline-block', fontWeight: 600 }}>
+                                    ↩ from {meal.batchSource}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

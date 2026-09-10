@@ -330,7 +330,7 @@ label { font-size: 13px; font-weight: 600; color: var(--text-secondary); display
 .day-date { font-size: 10px; color: var(--text-muted); }
 .meal-cell-empty { border: 1.5px dashed var(--border); border-radius: 8px; min-height: 52px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 20px; cursor: pointer; transition: all .15s; }
 .meal-cell-empty:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-light); }
-.meal-cell-filled { background: var(--bg-white); border: 0.5px solid var(--border); border-radius: 8px; padding: 8px; min-height: 52px; cursor: pointer; transition: border-color .15s; }
+.meal-cell-filled { background: var(--bg-white); border: 0.5px solid var(--border); border-radius: 8px; min-height: 52px; cursor: pointer; transition: border-color .15s; overflow: hidden; }
 .meal-cell-filled:hover { border-color: var(--teal); }
 .meal-cell-name { font-size: 12px; font-weight: 600; line-height: 1.3; color: var(--text); }
 .meal-cell-meta { font-size: 10px; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between; align-items: center; }
