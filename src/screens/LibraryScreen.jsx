@@ -2,17 +2,21 @@ import React, { useState } from 'react';
 import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { MEAL_SLOTS } from '../data/meals';
 
-// Unsplash image fetcher — searches by meal name
+// Unsplash image fetcher — searches by meal name with quality filters
 async function fetchMealImage(mealName, apiKey) {
   if (!apiKey) return null;
   try {
-    const query = encodeURIComponent(mealName + ' food meal');
+    const query = encodeURIComponent(mealName + ' food photography delicious');
     const res = await fetch(
-      `https://api.unsplash.com/search/photos?query=${query}&per_page=1&orientation=landscape`,
+      `https://api.unsplash.com/search/photos?query=${query}&per_page=5&orientation=landscape&content_filter=high`,
       { headers: { Authorization: `Client-ID ${apiKey}` } }
     );
     const data = await res.json();
-    return data.results?.[0]?.urls?.small || null;
+    // Pick the photo with the most likes — more likes = better quality shot
+    const results = data.results || [];
+    if (!results.length) return null;
+    const best = results.reduce((a, b) => (b.likes > a.likes ? b : a));
+    return best.urls?.regular || null;
   } catch { return null; }
 }
 function IngredientRow({ item, index, onChange, onRemove, stores }) {
@@ -243,11 +247,29 @@ export default function LibraryScreen({ store }) {
       {recipe && (
         <Sheet onClose={() => { setRecipeView(null); setGenerateError(''); }} title={recipe.name}>
           {recipe.image && (
-            <div style={{ height: 180, overflow: 'hidden', margin: '0 0 0' }}>
+            <div style={{ height: 180, overflow: 'hidden', position: 'relative' }}>
               <img src={recipe.image} alt={recipe.name}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={e => e.target.style.display = 'none'}
               />
+              {unsplashKey && (
+                <button onClick={async () => {
+                  const url = await fetchMealImage(recipe.name, unsplashKey);
+                  if (url) updateMeal(recipe.id, { image: url });
+                }} style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>
+                  Try another photo
+                </button>
+              )}
+            </div>
+          )}
+          {!recipe.image && unsplashKey && (
+            <div style={{ padding: '10px 16px 0' }}>
+              <button onClick={async () => {
+                const url = await fetchMealImage(recipe.name, unsplashKey);
+                if (url) updateMeal(recipe.id, { image: url });
+              }} style={{ background: 'var(--teal-light)', color: 'var(--teal)', border: '0.5px solid var(--teal)', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <Icon name="photo" size={13} /> Find a photo
+              </button>
             </div>
           )}
           <div style={{ padding: '12px 16px' }}>
