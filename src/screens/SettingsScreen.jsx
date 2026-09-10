@@ -190,25 +190,25 @@ export default function SettingsScreen({ store }) {
           )}
         </div>
 
-        {/* ── UNSPLASH KEY ── */}
+        {/* ── PEXELS KEY ── */}
         <div className="card mb-20">
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Unsplash API key</div>
-          <p className="text-sm mb-12">Used to pull food photos for your meal library. Free at unsplash.com/developers.</p>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Pexels API key</div>
+          <p className="text-sm mb-12">Used to pull food photos for your meal library. Free at pexels.com/api.</p>
           {unsplashKey ? (
             <div className="flex items-center gap-8 mb-8">
               <Icon name="check" size={16} style={{ color: 'var(--teal)' }} />
-              <span className="text-sm" style={{ color: 'var(--teal)' }}>Unsplash key saved — photos enabled</span>
+              <span className="text-sm" style={{ color: 'var(--teal)' }}>Pexels key saved — photos enabled</span>
             </div>
           ) : (
             <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-light)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
-              No Unsplash key — meal photos won't load
+              No Pexels key — meal photos won't load
             </div>
           )}
           <input
             type="password"
             value={newUnsplashKey}
             onChange={e => setNewUnsplashKey(e.target.value)}
-            placeholder="Paste your Unsplash Access Key…"
+            placeholder="Paste your Pexels API key…"
             className="mb-8"
           />
           <Button variant="primary" onClick={() => {
@@ -218,9 +218,9 @@ export default function SettingsScreen({ store }) {
             setNewUnsplashKey('');
             setTimeout(() => setUnsplashSaved(false), 2000);
           }}>
-            {unsplashSaved ? <><Icon name="check" size={16} /> Saved!</> : 'Save Unsplash key'}
+            {unsplashSaved ? <><Icon name="check" size={16} /> Saved!</> : 'Save Pexels key'}
           </Button>
-          <p className="text-xs text-muted mt-8">Get your free key at unsplash.com/developers → New Application</p>
+          <p className="text-xs text-muted mt-8">Get your free key at pexels.com/api — takes 2 minutes</p>
         </div>
 
         <Divider />

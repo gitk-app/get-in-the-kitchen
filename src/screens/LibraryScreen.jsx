@@ -2,21 +2,22 @@ import React, { useState } from 'react';
 import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { MEAL_SLOTS } from '../data/meals';
 
-// Unsplash image fetcher — searches by meal name with quality filters
+// Pexels image fetcher — much better food photography than Unsplash
 async function fetchMealImage(mealName, apiKey) {
   if (!apiKey) return null;
   try {
-    const query = encodeURIComponent(mealName + ' food photography delicious');
+    const query = encodeURIComponent(mealName + ' food');
     const res = await fetch(
-      `https://api.unsplash.com/search/photos?query=${query}&per_page=5&orientation=landscape&content_filter=high`,
-      { headers: { Authorization: `Client-ID ${apiKey}` } }
+      `https://api.pexels.com/v1/search?query=${query}&per_page=10&orientation=landscape`,
+      { headers: { Authorization: apiKey } }
     );
     const data = await res.json();
-    // Pick the photo with the most likes — more likes = better quality shot
-    const results = data.results || [];
-    if (!results.length) return null;
-    const best = results.reduce((a, b) => (b.likes > a.likes ? b : a));
-    return best.urls?.regular || null;
+    const photos = data.photos || [];
+    if (!photos.length) return null;
+    // Pick a random one from the top 5 so it varies
+    const top5 = photos.slice(0, 5);
+    const pick = top5[Math.floor(Math.random() * top5.length)];
+    return pick.src?.large || pick.src?.medium || null;
   } catch { return null; }
 }
 function IngredientRow({ item, index, onChange, onRemove, stores }) {
