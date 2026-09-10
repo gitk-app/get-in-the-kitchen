@@ -141,19 +141,13 @@ export default function SettingsScreen({ store }) {
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10, marginTop: 4 }}>
           My preferences
         </div>
-        <div className="card mb-20" style={{ padding: 0, overflow: 'hidden' }}>
-          {prefRows.map((row, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+          {prefRows.map((row) => (
             <div key={row.key} onClick={() => setEditSheet(row.key)}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: i < prefRows.length - 1 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer', position: 'relative' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: row.accent, borderRadius: '0 2px 2px 0' }} />
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: row.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: row.iconColor, fontFamily: '-apple-system, sans-serif' }}>{row.initial}</span>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{row.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.value}</div>
-              </div>
-              <Icon name="chevron-right" size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              style={{ background: '#fff', border: '0.5px solid var(--border)', borderRadius: 12, padding: '14px 14px 12px', cursor: 'pointer', borderTop: `3px solid ${row.accent}`, transition: 'border-color .15s' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: row.accent, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>{row.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, marginBottom: 4 }}>{row.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Tap to edit →</div>
             </div>
           ))}
         </div>
