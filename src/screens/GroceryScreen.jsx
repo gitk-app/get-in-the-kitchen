@@ -296,56 +296,59 @@ export default function GroceryScreen({ store }) {
 
   return (
     <div className="screen">
-      <div className="screen-header">
-        <span className="screen-title">Grocery list</span>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setShowHistory(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>History</button>
-          <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Icon name="settings" size={18} /></button>
+      {/* ── TEAL HERO ── */}
+      <div style={{ background: '#0A3D35', padding: '0 24px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>GROCERY LIST</div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={() => setShowHistory(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600 }}>History</button>
+            <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)' }}><Icon name="settings" size={16} /></button>
+          </div>
+        </div>
+
+        {/* Two stat tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Monthly budget</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: currentMonthOver ? '#ef4444' : '#C9A84C', lineHeight: 1 }}>${monthlyBudget}</div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>{trips} trips · ${perTripBudget}/trip</div>
+            <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 2, marginTop: 8, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: Math.min(100, (currentMonthSpent / monthlyBudget) * 100) + '%', background: currentMonthOver ? '#ef4444' : '#C9A84C', borderRadius: 2 }} />
+            </div>
+            <div style={{ fontSize: 9, color: currentMonthOver ? '#ef4444' : 'rgba(201,168,76,0.7)', marginTop: 4 }}>
+              {currentMonthOver ? `$${(currentMonthSpent - monthlyBudget).toFixed(0)} over` : `$${currentMonthRemaining.toFixed(0)} remaining`}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>This trip</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: tripOver ? '#ef4444' : '#C9A84C', lineHeight: 1 }}>${tripTotal.toFixed(2)}</div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>of ${perTripBudget} budget</div>
+            <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 2, marginTop: 8, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: Math.min(100, (tripTotal / perTripBudget) * 100) + '%', background: tripOver ? '#ef4444' : '#C9A84C', borderRadius: 2, transition: 'width .3s' }} />
+            </div>
+            <div style={{ fontSize: 9, color: tripOver ? '#ef4444' : 'rgba(201,168,76,0.7)', marginTop: 4 }}>
+              {tripOver ? `$${Math.abs(tripRemaining).toFixed(2)} over` : tripTotal > 0 ? `$${tripRemaining.toFixed(2)} left` : 'Enter store totals below'}
+            </div>
+          </div>
+        </div>
+
+        {/* YTD strip */}
+        <div style={{ background: 'rgba(201,168,76,0.12)', border: '0.5px solid rgba(201,168,76,0.3)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#C9A84C', textTransform: 'uppercase', letterSpacing: '.06em' }}>{currentYear} Year to date</div>
+            <div style={{ fontSize: 9, color: 'rgba(201,168,76,0.6)', marginTop: 2 }}>{ytdTrips.length} trip{ytdTrips.length !== 1 ? 's' : ''} · resets Jan 1</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#C9A84C' }}>${ytdTotal.toFixed(2)}</div>
+            <div style={{ fontSize: 9, color: 'rgba(201,168,76,0.6)', marginTop: 1 }}>of ${annualBudget.toFixed(0)}/yr</div>
+          </div>
         </div>
       </div>
 
       <div className="screen-padded">
-
-        {/* Budget card */}
+        {/* Store totals */}
         <div className="card mb-12">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2 }}>Monthly budget</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>${monthlyBudget}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{trips} trips · ${perTripBudget}/trip</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2, color: currentMonthOver ? 'var(--danger)' : 'var(--green)' }}>{currentMonthOver ? 'Over budget' : 'Remaining'}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: currentMonthOver ? 'var(--danger)' : 'var(--green)' }}>${Math.abs(currentMonthRemaining).toFixed(0)}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>${currentMonthSpent.toFixed(2)} spent this month</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span>Monthly spent</span><span>${currentMonthSpent.toFixed(2)} of ${monthlyBudget}</span>
-          </div>
-          <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
-            <div style={{ height: '100%', width: Math.min(100, (currentMonthSpent / monthlyBudget) * 100) + '%', background: currentMonthOver ? 'var(--danger)' : 'var(--green)', borderRadius: 4 }} />
-          </div>
-
-          {/* This trip sub-card */}
-          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>This trip</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Budget: ${perTripBudget}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: tripOver ? 'var(--danger)' : tripTotal > 0 ? 'var(--green)' : 'var(--text)' }}>${tripTotal.toFixed(2)}</div>
-                {tripTotal > 0 && <div style={{ fontSize: 11, color: tripOver ? 'var(--danger)' : 'var(--green)' }}>{tripOver ? '$' + Math.abs(tripRemaining).toFixed(2) + ' over' : '$' + tripRemaining.toFixed(2) + ' left'}</div>}
-              </div>
-            </div>
-            <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: Math.min(100, (tripTotal / perTripBudget) * 100) + '%', background: tripOver ? 'var(--danger)' : 'var(--green)', borderRadius: 3, transition: 'width .3s' }} />
-            </div>
-          </div>
-
-          {/* Store totals */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Enter totals by store</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Enter totals by store</div>
           {userStores.map(s => (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <StoreLogo name={s} size={16} />
@@ -355,43 +358,24 @@ export default function GroceryScreen({ store }) {
                   onChange={e => setStoreTotals(p => ({ ...p, [s]: e.target.value }))}
                   style={{ width: '100%', paddingLeft: 22, height: 38, fontSize: 15, fontWeight: 600 }} />
               </div>
-              {storeTotals[s] && parseFloat(storeTotals[s]) > 0 && <Icon name="check-circle" size={18} style={{ color: 'var(--green)', flexShrink: 0 }} />}
+              {storeTotals[s] && parseFloat(storeTotals[s]) > 0 && <Icon name="check-circle" size={18} style={{ color: 'var(--teal)', flexShrink: 0 }} />}
             </div>
           ))}
-
           {tripTotal > 0 && (
             <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>Trip total</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: tripOver ? 'var(--danger)' : 'var(--green)' }}>${tripTotal.toFixed(2)}</span>
-                <button onClick={saveTrip} style={{ background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save trip</button>
+                <span style={{ fontSize: 20, fontWeight: 700, color: tripOver ? 'var(--danger)' : 'var(--teal)' }}>${tripTotal.toFixed(2)}</span>
+                <button onClick={saveTrip} style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save trip</button>
               </div>
             </div>
           )}
         </div>
 
-        {/* YTD card */}
-        <div className="card mb-12" style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '0.5px solid #86efac' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '.05em' }}>{currentYear} Year to date</div>
-              <div style={{ fontSize: 11, color: '#166534', opacity: 0.8, marginTop: 2 }}>Resets Jan 1 · {ytdTrips.length} trip{ytdTrips.length !== 1 ? 's' : ''}</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#166534' }}>${ytdTotal.toFixed(2)}</div>
-              <div style={{ fontSize: 11, color: '#166534', opacity: 0.8 }}>of ${annualBudget.toFixed(0)}/yr</div>
-            </div>
-          </div>
-          <div style={{ height: 8, background: 'rgba(255,255,255,0.5)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: Math.min(100, (ytdTotal / annualBudget) * 100) + '%', background: '#16a34a', borderRadius: 4 }} />
-          </div>
-          <div style={{ fontSize: 11, color: '#166534', marginTop: 6, opacity: 0.8 }}>${(annualBudget - ytdTotal).toFixed(2)} remaining for {currentYear}</div>
-        </div>
-
         {/* View tabs */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-          <button onClick={() => setView('all')} style={{ flex: 1, padding: 9, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: view === 'all' ? 'var(--green)' : 'var(--surface)', color: view === 'all' ? '#fff' : 'var(--text-secondary)' }}>All items ({allItems.length})</button>
-          <button onClick={() => { setView('by-store'); setActiveStoreTab(userStores[0] || null); }} style={{ flex: 1, padding: 9, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: view === 'by-store' ? 'var(--green)' : 'var(--surface)', color: view === 'by-store' ? '#fff' : 'var(--text-secondary)' }}>By store</button>
+          <button onClick={() => setView('all')} style={{ flex: 1, padding: 9, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: view === 'all' ? 'var(--teal)' : 'var(--surface)', color: view === 'all' ? '#C9A84C' : 'var(--text-secondary)' }}>All items ({allItems.length})</button>
+          <button onClick={() => { setView('by-store'); setActiveStoreTab(userStores[0] || null); }} style={{ flex: 1, padding: 9, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: view === 'by-store' ? 'var(--teal)' : 'var(--surface)', color: view === 'by-store' ? '#C9A84C' : 'var(--text-secondary)' }}>By store</button>
         </div>
 
         {/* All items */}
