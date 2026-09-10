@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useStore from './hooks/useStore';
 import OnboardingScreen from './screens/OnboardingScreen';
+import HomeScreen from './screens/HomeScreen';
 import PlanScreen from './screens/PlanScreen';
 import PantryScreen from './screens/PantryScreen';
 import LibraryScreen from './screens/LibraryScreen';
@@ -9,6 +10,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import './index.css';
 
 const NAV_ITEMS = [
+  { id: 'home', label: 'Home', icon: 'home' },
   { id: 'plan', label: 'Plan', icon: 'calendar' },
   { id: 'grocery', label: 'Grocery', icon: 'shopping-cart' },
   { id: 'pantry', label: 'Pantry', icon: 'fridge' },
@@ -22,13 +24,14 @@ function Icon({ name, size = 20 }) {
 
 export default function App() {
   const store = useStore();
-  const [tab, setTab] = useState('plan');
+  const [tab, setTab] = useState('home');
 
   if (!store.onboarded) {
     return <OnboardingScreen store={store} />;
   }
 
   const screens = {
+    home: <HomeScreen store={store} onNavigate={setTab} />,
     plan: <PlanScreen store={store} />,
     grocery: <GroceryScreen store={store} />,
     pantry: <PantryScreen store={store} />,
@@ -63,8 +66,8 @@ export default function App() {
         </nav>
         <div className="sidebar-footer">
           <div className="sidebar-budget">
-            <span className="sidebar-budget-label">Weekly budget</span>
-            <span className="sidebar-budget-amount">${store.budget.toFixed(0)}</span>
+            <span className="sidebar-budget-label">Monthly budget</span>
+            <span className="sidebar-budget-amount">${(store.prefs?.monthlyBudget || store.budget * 4).toFixed(0)}</span>
           </div>
         </div>
       </aside>
@@ -86,7 +89,7 @@ export default function App() {
             role="button"
             aria-label={item.label}
           >
-            <Icon name={item.icon} size={22} />
+            <Icon name={item.icon} size={20} />
             <span className="nav-label">{item.label}</span>
           </div>
         ))}
