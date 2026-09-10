@@ -94,43 +94,61 @@ export default function SettingsScreen({ store }) {
 
   const allStores = [...STORES, ...(prefs?.customStores || []).filter(s => !STORES.includes(s))];
 
-  // Preference summary rows
+  // Preference summary rows — option C with Tabler icons + accent bars
   const prefRows = [
     {
       key: 'household',
       label: 'Household size',
       value: HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.label || '2 people',
-      icon: '👨‍👩‍👧',
+      icon: 'users',
+      accent: '#0A7A65',
+      iconBg: '#E8F5F1',
+      iconColor: '#0A5A45',
     },
     {
       key: 'dietary',
       label: 'Dietary needs',
       value: prefs?.dietary?.length ? prefs.dietary.join(', ') : 'No restrictions',
-      icon: '🥗',
+      icon: 'leaf',
+      accent: '#C9A84C',
+      iconBg: '#FFFAEF',
+      iconColor: '#7A5A10',
     },
     {
       key: 'stores',
       label: 'Your stores',
       value: prefs?.stores?.length ? prefs.stores.join(', ') : 'None selected',
-      icon: '🛒',
+      icon: 'shopping-bag',
+      accent: '#0A7A65',
+      iconBg: '#E8F5F1',
+      iconColor: '#0A5A45',
     },
     {
       key: 'budget',
       label: 'Budget & shopping',
       value: `$${monthlyBudget}/month · $${perTrip}/trip`,
-      icon: '💰',
+      icon: 'wallet',
+      accent: '#C9A84C',
+      iconBg: '#FFFAEF',
+      iconColor: '#7A5A10',
     },
     {
       key: 'proteins',
       label: 'Proteins you buy',
       value: prefs?.proteins?.length ? prefs.proteins.join(', ') : 'No preference',
-      icon: '🥩',
+      icon: 'meat',
+      accent: '#0A7A65',
+      iconBg: '#E8F5F1',
+      iconColor: '#0A5A45',
     },
     {
       key: 'mealtypes',
       label: 'Meal types',
       value: prefs?.mealTypes?.length ? prefs.mealTypes.map(t => MEAL_TYPES.find(m => m.value === t)?.label?.split(' ').slice(1).join(' ') || t).join(', ') : 'No preference',
-      icon: '🍽️',
+      icon: 'bowl-chopsticks',
+      accent: '#C9A84C',
+      iconBg: '#FFFAEF',
+      iconColor: '#7A5A10',
     },
   ];
 
@@ -148,8 +166,13 @@ export default function SettingsScreen({ store }) {
         <div className="card mb-20" style={{ padding: 0, overflow: 'hidden' }}>
           {prefRows.map((row, i) => (
             <div key={row.key} onClick={() => setEditSheet(row.key)}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: i < prefRows.length - 1 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer' }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>{row.icon}</span>
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: i < prefRows.length - 1 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer', position: 'relative' }}>
+              {/* Colored left accent bar */}
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: row.accent, borderRadius: '0 2px 2px 0' }} />
+              {/* Icon with tinted background */}
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: row.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
+                <Icon name={row.icon} size={17} style={{ color: row.iconColor }} />
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{row.label}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.value}</div>
