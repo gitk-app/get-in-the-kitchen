@@ -105,9 +105,7 @@ export default function HomeScreen({ store, onNavigate }) {
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 2 }}>{getGreeting()}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 10 }}>{getDateLabel()}</div>
           </div>
-          <div style={{ width: 36, height: 36, background: '#C9A84C', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="chef-hat" size={18} style={{ color: '#0A3D35' }} />
-          </div>
+          <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 36, height: 36, borderRadius: 10 }} />
         </div>
 
         {/* Budget row */}

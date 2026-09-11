@@ -45,7 +45,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="sidebar-logo-mark">
-            <Icon name="chef-hat" size={22} />
+            <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 36, height: 36 }} />
           </div>
           <div>
             <div className="sidebar-app-name">GET IN THE KITCHEN</div>

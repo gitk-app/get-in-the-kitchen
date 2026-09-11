@@ -109,9 +109,7 @@ export default function SettingsScreen({ store }) {
       {/* ── TEAL HERO HEADER ── */}
       <div style={{ background: '#0A3D35', padding: '20px 24px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <div style={{ width: 40, height: 40, background: '#C9A84C', borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon name="chef-hat" size={20} style={{ color: '#0A3D35' }} />
-          </div>
+          <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 40, height: 40, borderRadius: 11 }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>GET IN THE KITCHEN</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>Real meals. Real budget. Real life.</div>
