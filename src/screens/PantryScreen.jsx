@@ -1,10 +1,52 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, lazy, Suspense, useRef } from 'react';
 import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
 
 const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'));
 
 const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
+
+// Analyze fridge/pantry photo using Claude vision
+async function analyzeFridgePhoto(base64Image, apiKey) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/jpeg', data: base64Image }
+          },
+          {
+            type: 'text',
+            text: `Look at this photo of a fridge, pantry, or kitchen counter. Identify all visible food ingredients and items.
+
+For each item you can clearly see, return:
+- name: simple common name (e.g. "Chicken thighs", "Eggs", "Milk", "Spinach")
+- qty: estimated quantity if visible (e.g. "1 dozen", "2 lbs", "1 gallon") or empty string
+- category: one of: Produce, Vegetables, Dairy, Meat, Fish/Seafood, Pantry Staples, Frozen
+- type: "fresh" for perishables, "frozen" for frozen items, "shelf" for shelf-stable
+
+Only include items you can clearly identify. Do not guess. Return ONLY a JSON array, no other text:
+[{"name":"","qty":"","category":"Pantry Staples","type":"shelf"}]`
+          }
+        ]
+      }]
+    })
+  });
+  const data = await res.json();
+  const text = data.content?.[0]?.text || '[]';
+  return JSON.parse(text.replace(/```json|```/g, '').trim());
+}
 
 const TYPE_OPTIONS = [
   { value: 'fresh', label: 'Fresh / Perishable', desc: 'Tracks age — use soon alerts' },
@@ -106,7 +148,8 @@ function EditSheet({ item, onSave, onClose }) {
 }
 
 export default function PantryScreen({ store }) {
-  const { pantry, addPantryItem, removePantryItem, restockPantryItem, meals, setPantry } = store;
+  const { pantry, addPantryItem, removePantryItem, restockPantryItem, meals, setPantry, apiKey } = store;
+  const fridgeInputRef = useRef(null);
 
   const [name, setName] = useState('');
   const [qty, setQty] = useState('');
@@ -115,6 +158,9 @@ export default function PantryScreen({ store }) {
   const [scanning, setScanning] = useState(false);
   const [scanFeedback, setScanFeedback] = useState('');
   const [editItem, setEditItem] = useState(null);
+  const [fridgeAnalyzing, setFridgeAnalyzing] = useState(false);
+  const [fridgeResults, setFridgeResults] = useState(null);
+  const [fridgeSelected, setFridgeSelected] = useState({});
 
   // Personal UPC library — saved to localStorage
   const loadUpcLibrary = () => {
@@ -197,6 +243,56 @@ export default function PantryScreen({ store }) {
     setPantry(prev => prev.map(p => p.id === updatedItem.id ? updatedItem : p));
   };
 
+  // Fridge photo scan handler
+  const handleFridgePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!apiKey) {
+      alert('Add your Anthropic API key in Settings to use fridge scanning.');
+      return;
+    }
+    setFridgeAnalyzing(true);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      const items = await analyzeFridgePhoto(base64, apiKey);
+      if (!items.length) {
+        alert('No food items detected. Try a clearer photo with better lighting.');
+        setFridgeAnalyzing(false);
+        return;
+      }
+      // Pre-select all detected items
+      const selected = {};
+      items.forEach((_, i) => { selected[i] = true; });
+      setFridgeResults(items);
+      setFridgeSelected(selected);
+    } catch (err) {
+      alert('Could not analyze photo. Check your API key and try again.');
+    }
+    setFridgeAnalyzing(false);
+  };
+
+  const handleAddFridgeItems = () => {
+    const toAdd = fridgeResults.filter((_, i) => fridgeSelected[i]);
+    toAdd.forEach(item => {
+      addPantryItem({
+        name: item.name,
+        qty: item.qty || '',
+        category: item.category || 'Pantry Staples',
+        type: item.type || 'shelf',
+        fresh: item.type === 'fresh',
+      });
+    });
+    setFridgeResults(null);
+    setFridgeSelected({});
+    setScanFeedback(`✓ Added ${toAdd.length} item${toAdd.length !== 1 ? 's' : ''} from your photo`);
+    setTimeout(() => setScanFeedback(''), 3000);
+  };
+
   const freshUrgent = pantry
     .filter(p => p.type === 'fresh' || (p.fresh && p.type !== 'frozen'))
     .map(p => ({ ...p, age: daysOld(p.addedAt) }))
@@ -222,6 +318,70 @@ export default function PantryScreen({ store }) {
 
   return (
     <div className="screen">
+      {/* Hidden file input for fridge photo */}
+      <input ref={fridgeInputRef} type="file" accept="image/*" capture="environment"
+        style={{ display: 'none' }} onChange={handleFridgePhoto} />
+
+      {/* Analyzing overlay */}
+      {fridgeAnalyzing && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,61,53,0.92)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📸</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 8 }}>Scanning your fridge...</div>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 32 }}>AI is identifying your ingredients. Takes about 10 seconds.</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: '#C9A84C', animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />
+            ))}
+          </div>
+          <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}`}</style>
+        </div>
+      )}
+
+      {/* Fridge results review sheet */}
+      {fridgeResults && (
+        <>
+          <div onClick={() => setFridgeResults(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 200 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 640, background: 'var(--bg-white)', borderRadius: '20px 20px 0 0', zIndex: 201, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ width: 40, height: 4, background: 'var(--border-strong)', borderRadius: 2, margin: '12px auto 0', flexShrink: 0 }} />
+            <div style={{ padding: '12px 16px 10px', borderBottom: '0.5px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>📸 Found {fridgeResults.length} items</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Uncheck anything you don't want to add</div>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 16px' }}>
+              {fridgeResults.map((item, i) => (
+                <div key={i} onClick={() => setFridgeSelected(p => ({ ...p, [i]: !p[i] }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '0.5px solid var(--border)', cursor: 'pointer' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 6, border: fridgeSelected[i] ? 'none' : '1.5px solid var(--border)', background: fridgeSelected[i] ? 'var(--teal)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {fridgeSelected[i] && <span style={{ color: '#fff', fontSize: 13 }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                      {item.qty && <span>{item.qty} · </span>}
+                      {item.category}
+                      {item.type === 'fresh' && <span style={{ color: 'var(--teal)', marginLeft: 4 }}>· Fresh</span>}
+                      {item.type === 'frozen' && <span style={{ color: '#1e40af', marginLeft: 4 }}>· Frozen</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 16px 24px', borderTop: '0.5px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setFridgeResults(null)}
+                  style={{ flex: 1, background: 'var(--surface)', color: 'var(--text)', border: 'none', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={handleAddFridgeItems}
+                  style={{ flex: 2, background: 'var(--teal)', color: '#C9A84C', border: 'none', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  Add {Object.values(fridgeSelected).filter(Boolean).length} items to pantry
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {scanning && (
         <Suspense fallback={null}>
           <BarcodeScanner onResult={handleScanResult} onClose={() => setScanning(false)} />
@@ -334,15 +494,22 @@ export default function PantryScreen({ store }) {
       <div className="screen-padded">
         {/* Add form */}
         <div className="card mb-12">
-          <button onClick={() => { setScanFeedback(''); setScanning(true); }}
-            style={{
-              width: '100%', padding: 13, borderRadius: 10, marginBottom: 12,
-              background: 'var(--green)', color: '#fff', border: 'none',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-            }}>
-            <Icon name="scan" size={18} /> Scan barcode
-          </button>
+          {/* Two action buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            <button onClick={() => fridgeInputRef.current?.click()}
+              style={{ padding: 13, borderRadius: 10, background: 'var(--teal)', color: '#C9A84C', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Icon name="camera" size={17} /> Snap fridge
+            </button>
+            <button onClick={() => { setScanFeedback(''); setScanning(true); }}
+              style={{ padding: 13, borderRadius: 10, background: 'var(--surface)', color: 'var(--text)', border: '0.5px solid var(--border)', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Icon name="scan" size={17} /> Scan barcode
+            </button>
+          </div>
+
+          {/* Snap fridge hint */}
+          <div style={{ background: 'var(--teal-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--teal)' }}>
+            📸 <strong>New!</strong> Snap your fridge or pantry — AI detects all your ingredients at once
+          </div>
 
           {scanFeedback && (
             <div style={{
