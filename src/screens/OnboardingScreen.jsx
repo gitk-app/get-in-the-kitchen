@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Pill } from '../components/UI';
-import { STORES } from '../data/meals';
+import { STORES, SEED_MEALS } from '../data/meals';
 
 const DIETARY = ['No restrictions', 'Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Nut-free'];
 
@@ -44,7 +44,7 @@ const FREQ_OPTIONS = [
 ];
 
 export default function OnboardingScreen({ store }) {
-  const { setOnboarded, setPrefs, setBudget } = store;
+  const { setOnboarded, setPrefs, setBudget, apiFetch, setMeals, setApiKey } = store;
 
   const [step, setStep] = useState(0);
   const [household, setHousehold] = useState('2');
@@ -53,6 +53,7 @@ export default function OnboardingScreen({ store }) {
   const [monthlyBudget, setMonthlyBudget] = useState('450');
   const [shopFreq, setShopFreq] = useState('biweekly');
   const [weekType, setWeekType] = useState('normal');
+  const [apiKeyInput, setApiKeyInput] = useState('');
   const [proteins, setProteins] = useState([]);
   const [mealTypes, setMealTypes] = useState([]);
 
@@ -61,13 +62,14 @@ export default function OnboardingScreen({ store }) {
   const toggleProtein = (p) => setProteins(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
   const toggleMealType = (t) => setMealTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
+  const [generating, setGenerating] = useState(false);
+
   const trips = FREQ_OPTIONS.find(f => f.value === shopFreq)?.trips || 2;
   const perTrip = Math.round(parseFloat(monthlyBudget || 0) / trips);
 
-  const finish = () => {
+  const finish = async () => {
     const mb = parseFloat(monthlyBudget) || 450;
-    setBudget(mb / 4); // weekly budget for backward compat
-    setPrefs({
+    const prefs = {
       householdSize: household,
       dietary,
       stores,
@@ -77,7 +79,78 @@ export default function OnboardingScreen({ store }) {
       proteins,
       mealTypes,
       customStores: stores.filter(s => !STORES.includes(s)),
-    });
+    };
+
+    setBudget(mb / 4);
+    setPrefs(prefs);
+    if (apiKeyInput.trim()) setApiKey(apiKeyInput.trim());
+    setGenerating(true);
+
+    // Build AI-generated starter library based on this user's preferences
+    const hasKey = apiKeyInput.trim() || localStorage.getItem('gitk_api_key');
+    if (!hasKey) {
+      // No API key — fall back to filtered seed meals
+      const selectedProteinsLower = proteins.map(p => p.toLowerCase());
+      const filtered = SEED_MEALS.filter(m => {
+        if (!m.protein || m.protein === 'none') return true;
+        return selectedProteinsLower.some(sp => sp.includes(m.protein) || m.protein.includes(sp));
+      });
+      setMeals(filtered.length ? filtered : SEED_MEALS.filter(m => m.protein === 'eggs' || !m.protein));
+      setGenerating(false);
+      setOnboarded(true);
+      return;
+    }
+      const dietaryStr = dietary.length ? dietary.join(', ') : 'none';
+      const proteinStr = proteins.length ? proteins.join(', ') : 'chicken, eggs';
+      const mealTypeStr = mealTypes.length ? mealTypes.join(', ') : 'American home cooking';
+      const avoidProteins = ['beef','pork','chicken','turkey','fish','shrimp','sausage','lamb']
+        .filter(p => !proteins.map(x => x.toLowerCase()).some(sp => sp.includes(p)))
+        .join(', ');
+
+      const prompt = `Generate a personalized starter meal library for a new user of a budget meal planning app.
+
+USER PROFILE:
+- Household size: ${household} people
+- Proteins they buy: ${proteinStr}
+- Dietary restrictions: ${dietaryStr}
+- Meal style preferences: ${mealTypeStr}
+- NEVER use these proteins: ${avoidProteins || 'none'}
+
+Generate exactly 15 meals: 4 breakfasts, 4 lunches, 5 dinners, 2 snacks.
+All meals must be simple, budget-friendly, practical home cooking.
+Use only the proteins listed above. Never use restricted proteins.
+Scale ingredients for ${household} people.
+
+Return ONLY a JSON array, no other text:
+[{
+  "name": "meal name",
+  "slot": "Breakfast|Lunch|Dinner|Snack",
+  "cost": 3.50,
+  "protein": "chicken|beef|pork|turkey|fish|eggs|sausage|dairy|pb|none",
+  "prepTime": 20,
+  "items": [{"n": "ingredient name", "s": "Aldi|Walmart|Costco|Pantry / on hand"}],
+  "steps": ["step 1", "step 2", "step 3"]
+}]`;
+
+      const raw = await apiFetch(prompt, 3000);
+      const starterMeals = JSON.parse(raw);
+
+      if (Array.isArray(starterMeals) && starterMeals.length > 0) {
+        const withIds = starterMeals.map((m, i) => ({
+          ...m,
+          id: 'starter_' + Date.now() + '_' + i,
+          favorite: false,
+          image: null,
+        }));
+        setMeals(withIds);
+      }
+    } catch (e) {
+      // If AI fails, just start with empty library — don't block onboarding
+      setMeals([]);
+      console.warn('Starter library generation failed:', e);
+    }
+
+    setGenerating(false);
     setOnboarded(true);
   };
 
@@ -355,6 +428,39 @@ export default function OnboardingScreen({ store }) {
         </div>
       ),
       skipLabel: 'Skip — surprise me',
+      isLast: false,
+    },
+
+    // Step 8 — API Key (last step)
+    {
+      title: 'One last thing',
+      subtitle: 'Add your Anthropic API key to unlock Build My Week and AI recipe generation. You can skip this and add it later in Settings.',
+      content: (
+        <div>
+          <div style={{ background: 'var(--teal-light)', border: '0.5px solid var(--teal)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--teal)', marginBottom: 6 }}>What this unlocks:</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              ✦ Build My Week — AI plans your whole week in 30 seconds<br />
+              ✦ Recipe generation — instant steps for any meal<br />
+              ✦ Your personalized starter meal library
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+            Get a free key at <strong>console.anthropic.com</strong> → API Keys
+          </div>
+          <input
+            type="password"
+            value={apiKeyInput}
+            onChange={e => setApiKeyInput(e.target.value)}
+            placeholder="Paste your Anthropic API key here…"
+            style={{ width: '100%', marginBottom: 8 }}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            Your key is stored only on this device and never shared.
+          </div>
+        </div>
+      ),
+      skipLabel: 'Skip for now',
       isLast: true,
     },
   ];
@@ -362,6 +468,42 @@ export default function OnboardingScreen({ store }) {
   const current = steps[step];
   const totalSteps = steps.length - 1; // exclude welcome screen
   const progressStep = step; // step 0 = welcome (no bar), step 1-7 = progress
+
+  // Show a personalized loading screen while AI builds their starter library
+  if (generating) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0A3D35',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: '0 32px', textAlign: 'center'
+      }}>
+        <div style={{ width: 64, height: 64, background: '#C9A84C', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, fontSize: 32 }}>
+          🍳
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 12 }}>
+          Building your kitchen...
+        </div>
+        <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, marginBottom: 32 }}>
+          We're creating a personalized meal library based on your preferences. This takes about 15 seconds.
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[0,1,2].map(i => (
+            <div key={i} style={{
+              width: 10, height: 10, borderRadius: '50%', background: '#C9A84C',
+              animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`
+            }} />
+          ))}
+        </div>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{
