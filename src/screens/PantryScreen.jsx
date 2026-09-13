@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN — PantryScreen v2.2 — Snap My Fridge — build:20260913
+// GET IN THE KITCHEN - PantryScreen v2.2 - Snap My Fridge - build:20260913
 import React, { useState, lazy, Suspense, useRef } from 'react';
 import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
@@ -50,8 +50,8 @@ Only include items you can clearly identify. Do not guess. Return ONLY a JSON ar
 }
 
 const TYPE_OPTIONS = [
-  { value: 'fresh', label: 'Fresh / Perishable', desc: 'Tracks age — use soon alerts' },
-  { value: 'frozen', label: 'Frozen', desc: 'No age clock — stays until used' },
+  { value: 'fresh', label: 'Fresh / Perishable', desc: 'Tracks age - use soon alerts' },
+  { value: 'frozen', label: 'Frozen', desc: 'No age clock - stays until used' },
   { value: 'shelf', label: 'Shelf-stable', desc: 'Periodic check-in reminder' },
 ];
 
@@ -163,7 +163,7 @@ export default function PantryScreen({ store }) {
   const [fridgeResults, setFridgeResults] = useState(null);
   const [fridgeSelected, setFridgeSelected] = useState({});
 
-  // Personal UPC library — saved to localStorage
+  // Personal UPC library - saved to localStorage
   const loadUpcLibrary = () => {
     try { return JSON.parse(localStorage.getItem('gitk_upc_library') || '{}'); } catch { return {}; }
   };
@@ -207,7 +207,7 @@ export default function PantryScreen({ store }) {
         fromPersonalLib: false,
       });
     } else {
-      // Not found anywhere — show quick-add sheet with empty name so user can type it
+      // Not found anywhere - show quick-add sheet with empty name so user can type it
       // and we'll save the UPC mapping for next time
       setScanResult({
         name: '',
@@ -416,7 +416,7 @@ export default function PantryScreen({ store }) {
                   </span>
                   {scanResult.notFound && (
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Type the name below — we'll remember this barcode for next time
+                      Type the name below - we'll remember this barcode for next time
                     </div>
                   )}
                   {scanResult.fromPersonalLib && (
@@ -509,7 +509,7 @@ export default function PantryScreen({ store }) {
 
           {/* Snap fridge hint */}
           <div style={{ background: 'var(--teal-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--teal)' }}>
-            📸 <strong>New!</strong> Snap your fridge or pantry — AI detects all your ingredients at once
+            📸 <strong>New!</strong> Snap your fridge or pantry - AI detects all your ingredients at once
           </div>
 
           {scanFeedback && (

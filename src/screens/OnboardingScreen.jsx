@@ -89,7 +89,7 @@ export default function OnboardingScreen({ store }) {
     // Build AI-generated starter library based on this user's preferences
     const hasKey = apiKeyInput.trim() || localStorage.getItem('gitk_api_key');
     if (!hasKey) {
-      // No API key — fall back to filtered seed meals
+      // No API key - fall back to filtered seed meals
       const selectedProteinsLower = proteins.map(p => p.toLowerCase());
       const filtered = SEED_MEALS.filter(m => {
         if (!m.protein || m.protein === 'none') return true;
@@ -145,7 +145,7 @@ Return ONLY a JSON array, no other text:
         setMeals(withIds);
       }
     } catch (e) {
-      // If AI fails, just start with empty library — don't block onboarding
+      // If AI fails, just start with empty library - don't block onboarding
       setMeals([]);
       console.warn('Starter library generation failed:', e);
     }
@@ -155,7 +155,7 @@ Return ONLY a JSON array, no other text:
   };
 
   const steps = [
-    // Step 0 — Welcome
+    // Step 0 - Welcome
     {
       title: null,
       content: (
@@ -179,7 +179,7 @@ Return ONLY a JSON array, no other text:
       showContinue: false,
     },
 
-    // Step 1 — Household
+    // Step 1 - Household
     {
       title: 'Who are you feeding?',
       subtitle: "We'll size your meal plans and portions to match.",
@@ -201,7 +201,7 @@ Return ONLY a JSON array, no other text:
       ),
     },
 
-    // Step 2 — Dietary
+    // Step 2 - Dietary
     {
       title: 'Any dietary needs?',
       subtitle: 'Select all that apply. You can change this anytime in Settings.',
@@ -212,10 +212,10 @@ Return ONLY a JSON array, no other text:
           ))}
         </div>
       ),
-      skipLabel: 'No restrictions — skip',
+      skipLabel: 'No restrictions - skip',
     },
 
-    // Step 3 — Stores
+    // Step 3 - Stores
     {
       title: 'Where do you shop?',
       subtitle: "We'll route your grocery list by store so shopping is faster.",
@@ -282,7 +282,7 @@ Return ONLY a JSON array, no other text:
       ),
     },
 
-    // Step 4 — Budget
+    // Step 4 - Budget
     {
       title: "What's your monthly grocery budget?",
       subtitle: "We'll keep your meal plan within your budget and calculate your per-trip spending.",
@@ -330,7 +330,7 @@ Return ONLY a JSON array, no other text:
       ),
     },
 
-    // Step 5 — Week type
+    // Step 5 - Week type
     {
       title: 'What kind of week is this?',
       subtitle: "We'll adjust how complex your meal plan is based on how much time you have.",
@@ -356,7 +356,7 @@ Return ONLY a JSON array, no other text:
       ),
     },
 
-    // Step 6 — Proteins
+    // Step 6 - Proteins
     {
       title: 'What proteins do you usually buy?',
       subtitle: 'Select all that apply. Build My Week will rotate these so meals stay interesting.',
@@ -374,10 +374,10 @@ Return ONLY a JSON array, no other text:
           ))}
         </div>
       ),
-      skipLabel: 'Skip — no preference',
+      skipLabel: 'Skip - no preference',
     },
 
-    // Step 7 — Meal types
+    // Step 7 - Meal types
     {
       title: 'What does your household like to eat?',
       subtitle: 'Pick as many as you want. This helps us suggest meals you\'ll actually make.',
@@ -427,11 +427,11 @@ Return ONLY a JSON array, no other text:
           </div>
         </div>
       ),
-      skipLabel: 'Skip — surprise me',
+      skipLabel: 'Skip - surprise me',
       isLast: false,
     },
 
-    // Step 8 — API Key (last step)
+    // Step 8 - API Key (last step)
     {
       title: 'One last thing',
       subtitle: 'Add your Anthropic API key to unlock Build My Week and AI recipe generation. You can skip this and add it later in Settings.',
@@ -440,8 +440,8 @@ Return ONLY a JSON array, no other text:
           <div style={{ background: 'var(--teal-light)', border: '0.5px solid var(--teal)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--teal)', marginBottom: 6 }}>What this unlocks:</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              ✦ Build My Week — AI plans your whole week in 30 seconds<br />
-              ✦ Recipe generation — instant steps for any meal<br />
+              ✦ Build My Week - AI plans your whole week in 30 seconds<br />
+              ✦ Recipe generation - instant steps for any meal<br />
               ✦ Your personalized starter meal library
             </div>
           </div>
@@ -510,7 +510,7 @@ Return ONLY a JSON array, no other text:
       minHeight: '100vh', background: 'var(--bg)', display: 'flex',
       flexDirection: 'column', maxWidth: 480, margin: '0 auto', padding: '0 24px'
     }}>
-      {/* Progress bar — only show on steps 1+ */}
+      {/* Progress bar - only show on steps 1+ */}
       {step > 0 && (
         <div style={{ paddingTop: 52, paddingBottom: 0 }}>
           <div style={{ display: 'flex', gap: 4, marginBottom: 28 }}>
