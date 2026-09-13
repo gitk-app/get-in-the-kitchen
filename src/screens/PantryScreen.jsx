@@ -499,7 +499,7 @@ export default function PantryScreen({ store }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
             <button onClick={() => fridgeInputRef.current?.click()}
               style={{ padding: 13, borderRadius: 10, background: 'var(--teal)', color: '#C9A84C', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Icon name="camera" size={17} /> Snap fridge
+              <Icon name="camera" size={17} /> Snap pantry/fridge
             </button>
             <button onClick={() => { setScanFeedback(''); setScanning(true); }}
               style={{ padding: 13, borderRadius: 10, background: 'var(--surface)', color: 'var(--text)', border: '0.5px solid var(--border)', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -507,7 +507,7 @@ export default function PantryScreen({ store }) {
             </button>
           </div>
 
-          {/* Snap fridge hint */}
+          {/* Snap pantry/fridge hint */}
           <div style={{ background: 'var(--teal-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--teal)' }}>
             📸 <strong>New!</strong> Snap your fridge or pantry - AI detects all your ingredients at once
           </div>
