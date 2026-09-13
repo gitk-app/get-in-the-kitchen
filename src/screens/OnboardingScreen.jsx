@@ -100,6 +100,7 @@ export default function OnboardingScreen({ store }) {
       setOnboarded(true);
       return;
     }
+    try {
       const dietaryStr = dietary.length ? dietary.join(', ') : 'none';
       const proteinStr = proteins.length ? proteins.join(', ') : 'chicken, eggs';
       const mealTypeStr = mealTypes.length ? mealTypes.join(', ') : 'American home cooking';
