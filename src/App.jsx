@@ -1,3 +1,4 @@
+// GET IN THE KITCHEN — App v2.2 — build:20260913-snapfridge
 import React, { useState } from 'react';
 import useStore from './hooks/useStore';
 import OnboardingScreen from './screens/OnboardingScreen';
