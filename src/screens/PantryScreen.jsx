@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN — PantryScreen v2.1 — Snap My Fridge
+// GET IN THE KITCHEN — PantryScreen v2.2 — Snap My Fridge — build:20260913
 import React, { useState, lazy, Suspense, useRef } from 'react';
 import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
