@@ -1,3 +1,4 @@
+
 import React, { useState, lazy, Suspense, useRef } from 'react';
 import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
