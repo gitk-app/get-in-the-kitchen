@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN — App v2.2 — build:20260913-snapfridge
+// GET IN THE KITCHEN - App v2.2 - build:20260913-snapfridge
 import React, { useState } from 'react';
 import useStore from './hooks/useStore';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -28,7 +28,7 @@ export default function App() {
   const [tab, setTab] = useState('home');
 
   if (!store.onboarded) {
-    return <OnboardingScreen store={store} />;
+    return <OnboardingScreen store={store} onNavigate={setTab} />;
   }
 
   const screens = {

@@ -110,8 +110,11 @@ function StoreBarChart({ stores, total }) {
 const FREQ_OPTIONS = [
   { value: 'weekly', label: 'Weekly', trips: 4 },
   { value: 'biweekly', label: 'Every 2 weeks', trips: 2 },
-  { value: 'twicemonth', label: 'Twice a month', trips: 2 },
+  { value: 'monthly', label: 'Once a month', trips: 1 },
 ];
+
+// Older saves may say 'twicemonth', which works the same as every 2 weeks
+const normalizeFreq = (f) => (f === 'twicemonth' ? 'biweekly' : f);
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -124,7 +127,7 @@ export default function GroceryScreen({ store }) {
 
   const monthlyBudget = prefs?.monthlyBudget || budget * 4;
   const annualBudget = monthlyBudget * 12;
-  const freq = prefs?.shopFreq || 'biweekly';
+  const freq = normalizeFreq(prefs?.shopFreq || 'biweekly');
   const trips = FREQ_OPTIONS.find(f => f.value === freq)?.trips || 2;
   const perTripBudget = Math.round(monthlyBudget / trips);
   const userStores = prefs?.stores || [];
@@ -523,7 +526,7 @@ export default function GroceryScreen({ store }) {
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{month.trips.length} trip{month.trips.length !== 1 ? 's' : ''} · budget ${month.budget}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: over ? 'var(--danger)' : month.total > 0 ? 'var(--green)' : 'var(--text-muted)' }}>{month.total > 0 ? '$' + month.total.toFixed(2) : '—'}</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: over ? 'var(--danger)' : month.total > 0 ? 'var(--green)' : 'var(--text-muted)' }}>{month.total > 0 ? '$' + month.total.toFixed(2) : '-'}</div>
                         {month.total > 0 && <div style={{ fontSize: 11, color: over ? 'var(--danger)' : 'var(--green)' }}>{over ? '$' + (month.total - month.budget).toFixed(2) + ' over' : '$' + (month.budget - month.total).toFixed(2) + ' under'}</div>}
                       </div>
                     </div>

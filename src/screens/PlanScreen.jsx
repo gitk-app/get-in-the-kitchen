@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN — PlanScreen v2.1
+// GET IN THE KITCHEN - PlanScreen v2.2 (food safety rules)
 import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { DAYS, PLAN_SLOTS, PROTEIN_OPTIONS } from '../data/meals';
@@ -21,6 +21,108 @@ async function fetchMealImage(mealName, apiKey) {
   } catch { return null; }
 }
 
+
+// ---------------------------------------------------------------------------
+// Food safety rules. Reads both the new onboarding labels and older setting ids
+// so every AI prompt respects allergies, house rules, and health goals.
+// ---------------------------------------------------------------------------
+const ALLERGY_TEXT = {
+  'peanuts': 'peanuts, peanut butter, peanut oil',
+  'tree nuts': 'almonds, walnuts, pecans, cashews, pistachios, hazelnuts, and any tree nut',
+  'shellfish': 'shrimp, crab, lobster, crawfish, scallops, clams, mussels, oysters',
+  'fish': 'all fish, fish sauce, anchovies',
+  'eggs': 'eggs and anything made with eggs, including mayonnaise',
+  'milk or dairy': 'milk, cheese, butter, cream, sour cream, yogurt',
+  'wheat or gluten': 'wheat, flour, bread, pasta, flour tortillas, regular soy sauce',
+  'soy': 'soy, soy sauce, tofu, edamame, soybean oil',
+  'sesame': 'sesame seeds, sesame oil, tahini',
+};
+
+const ALLERGY_WORDS = {
+  'peanuts': ['peanut'],
+  'tree nuts': ['almond', 'walnut', 'pecan', 'cashew', 'pistachio', 'hazelnut'],
+  'shellfish': ['shrimp', 'crab', 'lobster', 'crawfish', 'scallop', 'clam', 'mussel', 'oyster', 'shellfish'],
+  'fish': ['fish', 'salmon', 'tuna', 'tilapia', 'cod', 'whiting', 'catfish'],
+  'eggs': ['egg'],
+  'milk or dairy': ['cheese', 'milk', 'yogurt', 'cream', 'butter'],
+  'wheat or gluten': ['pasta', 'bread', 'sandwich', 'toast', 'wrap', 'noodle', 'pancake', 'waffle'],
+  'soy': ['tofu', 'soy', 'edamame'],
+  'sesame': ['sesame', 'tahini'],
+};
+
+// Old setting ids and new onboarding labels both land here (lowercased)
+const RULE_TEXT = {
+  'vegetarian': 'all meat, poultry, fish, and seafood',
+  'vegan': 'all meat, poultry, fish, seafood, dairy, eggs, and honey',
+  'seafood, no meat': 'all meat and poultry (fish and seafood are fine)',
+  'no pork': 'pork, ham, bacon, pork sausage', 'no-pork': 'pork, ham, bacon, pork sausage',
+  'no red meat': 'beef, pork, lamb, ham, bacon',
+  'no-beef': 'beef, ground beef, steak, roast beef, pot roast, burgers',
+  'no-seafood': 'fish, seafood, shrimp',
+  'halal': 'pork, bacon, ham, alcohol, and any non-halal meat',
+  'kosher': 'pork, shellfish, and mixing meat with dairy',
+  'gluten-free': 'gluten, wheat, bread, pasta', 'gluten free': 'gluten, wheat, bread, pasta',
+  'dairy-free': 'dairy, cheese, milk, butter', 'dairy free': 'dairy, cheese, milk, butter',
+};
+
+const RULE_WORDS = {
+  'vegetarian': ['chicken', 'beef', 'pork', 'turkey', 'sausage', 'lamb', 'fish', 'shrimp', 'bacon', 'ham'],
+  'vegan': ['chicken', 'beef', 'pork', 'turkey', 'sausage', 'lamb', 'fish', 'shrimp', 'bacon', 'ham', 'egg', 'cheese', 'milk', 'yogurt'],
+  'seafood, no meat': ['chicken', 'beef', 'pork', 'turkey', 'sausage', 'lamb', 'bacon', 'ham'],
+  'no pork': ['pork', 'bacon', 'ham'], 'no-pork': ['pork', 'bacon', 'ham'],
+  'no red meat': ['beef', 'pork', 'lamb', 'bacon', 'ham', 'steak', 'burger'],
+  'no-beef': ['beef', 'steak', 'burger'],
+  'no-seafood': ['fish', 'shrimp', 'salmon', 'tuna'],
+  'halal': ['pork', 'bacon', 'ham'],
+  'kosher': ['pork', 'bacon', 'ham', 'shrimp', 'crab', 'lobster'],
+};
+
+function getDietRules(prefs) {
+  const allergies = (prefs?.allergies || []).map(a => String(a));
+  const raw = [...(prefs?.houseRules || []), ...(prefs?.dietary || [])]
+    .map(d => String(d))
+    .filter(d => !/ allergy$/i.test(d) && d.toLowerCase() !== 'we eat everything');
+  const seen = new Set();
+  const rules = raw.filter(r => { const k = r.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  const goals = (prefs?.healthGoals || []).map(g => String(g));
+
+  const allergyList = allergies.map(a => ALLERGY_TEXT[a.toLowerCase()] || a);
+  const avoidList = rules.map(r => RULE_TEXT[r.toLowerCase()] || r);
+  const blockWords = [
+    ...allergies.flatMap(a => ALLERGY_WORDS[a.toLowerCase()] || [a.toLowerCase()]),
+    ...rules.flatMap(r => RULE_WORDS[r.toLowerCase()] || []),
+  ];
+
+  const allergyStr = allergyList.length ? allergyList.join('; ') : '';
+  const lines = [];
+  if (allergyStr) {
+    lines.push(`FOOD ALLERGIES (life-safety rule, overrides everything else): never include ${allergyStr}. This includes sauces, oils, marinades, broths, garnishes, and pre-made ingredients. If an ingredient might contain an allergen, leave it out.`);
+  }
+  if (avoidList.length) {
+    lines.push(`HOUSE RULES (strict, never break): do not use ${avoidList.join('; ')}.`);
+  }
+  if (goals.length) {
+    lines.push(`HEALTH GOALS (lean meals this way, not a hard rule): ${goals.join(', ')}.`);
+  }
+  return { allergies, rules, goals, avoidList, blockWords, guard: lines.join('\n') };
+}
+
+function mealIsBlocked(meal, blockWords) {
+  if (!blockWords.length) return false;
+  const text = [meal.name || '', meal.protein || '', ...(meal.items || []).map(i => i.n || '')].join(' ').toLowerCase();
+  return blockWords.some(w => text.includes(w));
+}
+
+function parseJson(text) {
+  const clean = String(text || '').replace(/```json|```/g, '').trim();
+  try { return JSON.parse(clean); } catch (e) { /* try to trim extra text */ }
+  const firstObj = clean.indexOf('{'); const firstArr = clean.indexOf('[');
+  const useArr = firstArr !== -1 && (firstObj === -1 || firstArr < firstObj);
+  const start = useArr ? firstArr : firstObj;
+  const end = useArr ? clean.lastIndexOf(']') : clean.lastIndexOf('}');
+  return JSON.parse(clean.slice(start, end + 1));
+}
+
 const getMostRecentSunday = () => {
   const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0); return d;
 };
@@ -30,7 +132,7 @@ const getWeekStart = (w) => {
 const formatRange = (w) => {
   const s = getWeekStart(w), e = new Date(s); e.setDate(s.getDate() + 6);
   const o = { month: 'short', day: 'numeric', year: 'numeric' };
-  return s.toLocaleDateString('en-US', o) + ' – ' + e.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return s.toLocaleDateString('en-US', o) + ' - ' + e.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
@@ -53,6 +155,7 @@ export default function PlanScreen({ store }) {
   const [aiPicks, setAiPicks] = useState({});
   const [confirmClear, setConfirmClear] = useState(false);
 
+  const diet = getDietRules(prefs);
   const total = planTotal();
   const mTotal = monthlyTotal();
   const mBudget = prefs?.monthlyBudget || budget * 4;
@@ -80,11 +183,12 @@ export default function PlanScreen({ store }) {
     setAiPicks(p => ({ ...p, [key]: 'loading' }));
     const pList = pantry.map(p => p.qty ? p.name + ' (' + p.qty + ')' : p.name);
     const existing = meals.map(m => m.name).join('; ');
-    const prompt = `Suggest 3 budget-friendly ${slot} meal ideas. ${pList.length ? 'Pantry: ' + pList.join(', ') + '.' : ''} Simple, family-friendly. Skip these: ${existing}. JSON only: [{"name":"","cost":0,"protein":"none"}]`;
+    const prompt = `Suggest 3 budget-friendly ${slot} meal ideas. ${pList.length ? 'Pantry: ' + pList.join(', ') + '.' : ''} Simple, family-friendly. Skip these: ${existing}.${diet.guard ? '\n' + diet.guard + '\n' : ' '}JSON only: [{"name":"","cost":0,"protein":"none"}]`;
     try {
       const text = await apiFetch(prompt, 300);
-      const parsed = JSON.parse(text);
-      setAiPicks(p => ({ ...p, [key]: parsed.map((x, i) => ({ ...x, id: 'aip-' + Date.now() + i })) }));
+      const parsed = parseJson(text);
+      const safe = parsed.filter(x => !mealIsBlocked(x, diet.blockWords));
+      setAiPicks(p => ({ ...p, [key]: safe.map((x, i) => ({ ...x, id: 'aip-' + Date.now() + i })) }));
     } catch { setAiPicks(p => ({ ...p, [key]: [] })); }
   };
 
@@ -99,10 +203,10 @@ export default function PlanScreen({ store }) {
   };
 
   const generateSteps = async (id, name, slot) => {
-    const prompt = `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly. JSON only: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
+    const prompt = `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly.${diet.guard ? '\n' + diet.guard + '\n' : ' '}JSON only: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
     try {
       const text = await apiFetch(prompt, 400);
-      const recipe = JSON.parse(text);
+      const recipe = parseJson(text);
       updateMeal(id, { steps: recipe.steps || [], prepTime: recipe.prepTime || 20 });
     } catch {}
   };
@@ -112,45 +216,37 @@ export default function PlanScreen({ store }) {
     const pList = pantry.map(p => p.qty ? p.name + ' (' + p.qty + ')' : p.name);
     const currentMeals = store.mealsRef.current;
 
-    // Only pass meals that match the user's selected proteins to the AI
-    // This prevents beef/pork meals from being suggested to users who didn't select them
-    const selectedProteinsLower = wizardProteins.map(p => p.toLowerCase());
-    const filteredMeals = currentMeals.filter(m => {
-      if (!m.protein || m.protein === 'none') return true; // always include non-protein meals
-      const mProtein = m.protein.toLowerCase();
-      return selectedProteinsLower.some(sp => sp.includes(mProtein) || mProtein.includes(sp));
-    });
-    const myMeals = filteredMeals.map(m => `${m.name} (${m.slot}, $${m.cost.toFixed(2)})`).join('; ');
-    const proteins = wizardProteins.length ? wizardProteins.join(', ') : 'chicken, eggs';
-    const weekType = prefs?.weekType || 'normal';
+    // Proteins for this week, minus anything blocked by an allergy or house rule
+    const safeProteins = wizardProteins.filter(p => !diet.blockWords.some(w => p.toLowerCase().includes(w)));
+    const selectedText = safeProteins.join(' ').toLowerCase() + (safeProteins.some(p => /shellfish/i.test(p)) ? ' shrimp' : '');
 
-    // Dietary restrictions
-    const dietary = prefs?.dietary?.length ? prefs.dietary : [];
+    // Only pass library meals that are safe and match this week's proteins
+    const filteredMeals = currentMeals.filter(m => {
+      if (mealIsBlocked(m, diet.blockWords)) return false;
+      if (!m.protein || m.protein === 'none') return true;
+      if (!safeProteins.length) return true;
+      const mProtein = m.protein.toLowerCase();
+      return selectedText.includes(mProtein) || safeProteins.some(sp => mProtein.includes(sp.toLowerCase()));
+    });
+    const myMeals = filteredMeals.map(m => `${m.name} (${m.slot}, $${(m.cost || 0).toFixed(2)})`).join('; ');
+    const proteins = safeProteins.length ? safeProteins.join(', ') : 'a variety of affordable everyday proteins';
+
     const mealTypes = prefs?.mealTypes?.length ? prefs.mealTypes : [];
     const householdSize = prefs?.householdSize || '2-3';
 
-    const avoidList = [];
-    if (dietary.includes('vegetarian') || dietary.includes('vegan')) avoidList.push('all meat and poultry');
-    if (dietary.includes('vegan')) avoidList.push('all dairy and eggs');
-    if (dietary.includes('gluten-free')) avoidList.push('gluten, wheat, bread, pasta');
-    if (dietary.includes('dairy-free')) avoidList.push('dairy, cheese, milk, butter');
-    if (dietary.includes('no-pork')) avoidList.push('pork, ham, bacon, sausage');
-    if (dietary.includes('no-beef')) avoidList.push('beef, ground beef, steak, roast beef, pot roast, burgers');
-    if (dietary.includes('no-seafood')) avoidList.push('fish, seafood, shrimp');
-    if (dietary.includes('halal')) avoidList.push('pork and non-halal meat');
-    if (dietary.includes('kosher')) avoidList.push('pork, shellfish, mixing meat with dairy');
+    // Proteins NOT picked this week (only when she picked some)
+    const skipProteins = [];
+    if (safeProteins.length) {
+      ['beef', 'pork', 'chicken', 'turkey', 'fish', 'shrimp', 'lamb', 'sausage'].forEach(p => {
+        if (!selectedText.includes(p)) skipProteins.push(p);
+      });
+    }
 
-    // Exclude proteins NOT selected by user
-    const allProteins = ['beef', 'pork', 'chicken', 'turkey', 'fish', 'shrimp', 'lamb'];
-    const selectedProteins = wizardProteins.map(p => p.toLowerCase());
-    allProteins.forEach(p => {
-      if (!selectedProteins.some(sp => sp.includes(p)) && !avoidList.some(a => a.includes(p))) {
-        avoidList.push(p);
-      }
-    });
-
-    const avoidStr = avoidList.length ? avoidList.join(', ') : 'none specified';
     const mealTypeStr = mealTypes.length ? mealTypes.join(', ') : 'American home cooking';
+    const safetyBlock = [
+      diet.guard,
+      skipProteins.length ? `PROTEINS NOT PICKED THIS WEEK (do not use): ${skipProteins.join(', ')}.` : '',
+    ].filter(Boolean).join('\n') || 'No restrictions given.';
 
     const prompt = `You are meal planning for a busy working mom who batch cooks. Build a smart 7-day plan where meals connect to each other.
 
@@ -163,11 +259,11 @@ LEFTOVERS NIGHTS: ${wizardLeftovers}
 PANTRY ON HAND: ${pList.length ? pList.join(', ') : 'not specified'}
 MY SAVED MEALS: ${myMeals || 'none yet'}
 
-⚠️ DIETARY RESTRICTIONS — STRICTLY REQUIRED — NEVER VIOLATE THESE:
-DO NOT USE ANY OF THESE UNDER ANY CIRCUMSTANCES: ${avoidStr}
-Only use proteins explicitly listed in PROTEINS SELECTED above. If beef is not listed, do not suggest it in any form.
+DIETARY RULES, STRICTLY REQUIRED, NEVER VIOLATE THESE:
+${safetyBlock}
+${safeProteins.length ? 'Only use proteins listed in PROTEINS SELECTED above.' : ''}
 
-BATCH COOKING RULES — this is the most important part:
+BATCH COOKING RULES - this is the most important part:
 1. Sunday dinner = the BIG COOK. Pick ONE protein from PROTEINS SELECTED only and make a large batch. Set batchCook:true and batchProtein to the protein name.
 2. Monday and Tuesday meals should USE the Sunday batch in different forms. Set fromBatch:true and batchSource:"Sunday dinner".
 3. If a second protein is selected, Wednesday dinner = second small cook using that protein. Set batchCook:true.
@@ -188,7 +284,7 @@ Respond ONLY with this exact JSON structure, no other text:
 {"Sunday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Monday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Tuesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Wednesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Thursday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Friday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Saturday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}}}`;
     try {
       const text = await apiFetch(prompt, 2000);
-      const weekPlan = JSON.parse(text);
+      const weekPlan = parseJson(text);
 
       const newMealRecords = [];
       const newPlan = {};
@@ -319,7 +415,7 @@ Respond ONLY with this exact JSON structure, no other text:
           )}
         </div>
 
-        {/* Welcome banner — shown when week is empty */}
+        {/* Welcome banner - shown when week is empty */}
         {Object.keys(currentPlan).length === 0 && (
           <div style={{
             background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
@@ -331,7 +427,7 @@ Respond ONLY with this exact JSON structure, no other text:
               Welcome to GET IN THE KITCHEN
             </div>
             <div style={{ fontSize: 13, color: '#166534', opacity: 0.85, lineHeight: 1.6, marginBottom: 16 }}>
-              Your week is empty and ready to plan. Tap <strong>Build my week</strong> above and Claude will fill it in based on your budget and preferences — takes about 30 seconds.
+              Your week is empty and ready to plan. Tap <strong>Build my week</strong> above and Claude will fill it in based on your budget and preferences - takes about 30 seconds.
             </div>
             <div style={{ fontSize: 12, color: '#166534', opacity: 0.7 }}>
               Or tap any <strong>+</strong> cell below to add meals one at a time.
@@ -580,12 +676,32 @@ Respond ONLY with this exact JSON structure, no other text:
                     <div key={group.group} className="mb-12">
                       <SectionLabel>{group.group}</SectionLabel>
                       <div className="pill-group">
-                        {group.items.map(p => (
+                        {group.items.filter(p => !diet.blockWords.some(w => p.toLowerCase().includes(w))).map(p => (
                           <Pill key={p} selected={wizardProteins.includes(p)} onClick={() => toggleProtein(p)}>{p}</Pill>
                         ))}
                       </div>
                     </div>
                   ))}
+                  {(() => {
+                    const listed = PROTEIN_OPTIONS.flatMap(g => g.items);
+                    const extras = (prefs?.proteins || []).filter(p => !listed.includes(p) && !diet.blockWords.some(w => p.toLowerCase().includes(w)));
+                    if (!extras.length) return null;
+                    return (
+                      <div className="mb-12">
+                        <SectionLabel>Your usual proteins</SectionLabel>
+                        <div className="pill-group">
+                          {extras.map(p => (
+                            <Pill key={p} selected={wizardProteins.includes(p)} onClick={() => toggleProtein(p)}>{p}</Pill>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {(diet.allergies.length > 0 || diet.rules.length > 0) && (
+                    <p className="text-sm" style={{ marginTop: 4 }}>
+                      Leaving out {[...diet.allergies, ...diet.rules].join(', ').toLowerCase()} every time.
+                    </p>
+                  )}
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
@@ -611,7 +727,7 @@ Respond ONLY with this exact JSON structure, no other text:
                   <h3 style={{ marginBottom: 4 }}>3. Leftover nights?</h3>
                   <p className="text-sm mb-12">Dinner covers next day's lunch.</p>
                   <div className="pill-group">
-                    {[['0', 'None'], ['1-2', '1–2 nights'], ['3+', '3+ nights']].map(([val, label]) => (
+                    {[['0', 'None'], ['1-2', '1-2 nights'], ['3+', '3+ nights']].map(([val, label]) => (
                       <Pill key={val} selected={wizardLeftovers === val} onClick={() => setWizardLeftovers(val)}>{label}</Pill>
                     ))}
                   </div>
@@ -619,7 +735,7 @@ Respond ONLY with this exact JSON structure, no other text:
                 <div className="divider" />
                 <div className="mb-16">
                   <h3 style={{ marginBottom: 4 }}>4. Anything already locked in?</h3>
-                  <p className="text-sm mb-8">Optional — e.g. "Tuesday dinner is breakfast for dinner"</p>
+                  <p className="text-sm mb-8">Optional - e.g. "Tuesday dinner is breakfast for dinner"</p>
                   <textarea value={wizardLocked} onChange={e => setWizardLocked(e.target.value)}
                     placeholder="Leave blank if nothing is set yet…"
                     style={{ height: 72, resize: 'none' }} />
