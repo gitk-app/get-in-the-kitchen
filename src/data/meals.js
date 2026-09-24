@@ -185,7 +185,7 @@ export const SEED_MEALS = [
     ],
     steps: [
       'Preheat oven to 425°F.',
-      'Pat chicken thighs dry with paper towels — this is the key to crispy skin.',
+      'Pat chicken thighs dry with paper towels. This is the key to crispy skin.',
       'Season all over with salt, pepper, garlic powder, and paprika.',
       'Place skin-side up on a baking sheet. Bake 35-40 minutes until skin is golden and crispy.',
       'While chicken bakes, cook rice and steam broccoli.',
@@ -214,8 +214,8 @@ export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Fr
 export const PANTRY_CATEGORIES = ['Produce', 'Vegetables', 'Dairy', 'Meat', 'Fish/Seafood', 'Pantry Staples', 'Frozen'];
 export const STORES = ['Aldi', 'Walmart', 'Costco', "Sam's Club", 'Trader Joe\'s', 'Kroger', 'Other'];
 
+// Shared protein list. Matches onboarding, Settings, and Build My Week.
 export const PROTEIN_OPTIONS = [
-  { group: 'Meat & Seafood', items: ['Chicken', 'Beef', 'Pork', 'Turkey', 'Sausage', 'Fish/Seafood', 'Shrimp'] },
-  { group: 'Vegetarian / Vegan', items: ['Eggs', 'Tofu', 'Tempeh', 'Lentils', 'Chickpeas', 'Black beans', 'Veggie burger'] },
-  { group: 'Dairy & Other', items: ['Cheese/Dairy', 'Peanut butter', 'No preference'] },
+  { group: 'Meat and seafood', items: ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Fish', 'Shellfish', 'Lamb', 'Sausage'] },
+  { group: 'Plant and other', items: ['Eggs', 'Beans', 'Lentils', 'Chickpeas', 'Tofu', 'Greek yogurt', 'Peanut butter'] },
 ];
