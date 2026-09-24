@@ -145,6 +145,7 @@ export default function PlanScreen({ store }) {
   const [manualEntry, setManualEntry] = useState('');
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [recipeView, setRecipeView] = useState(null);
+  const [stepsStatus, setStepsStatus] = useState({}); // mealId -> 'loading' | 'error'
   const [wizard, setWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardProteins, setWizardProteins] = useState(() => prefs?.proteins || []);
@@ -202,13 +203,27 @@ export default function PlanScreen({ store }) {
     generateSteps(newId, pick.name, slot);
   };
 
-  const generateSteps = async (id, name, slot) => {
-    const prompt = `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly.${diet.guard ? '\n' + diet.guard + '\n' : ' '}JSON only: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
+  // Writes recipe steps. Retries once, and shows an error instead of failing silently.
+  const generateSteps = async (id, name, slot, attempt = 1) => {
+    setStepsStatus(s => ({ ...s, [id]: 'loading' }));
+    const prompt = `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly.
+Write 5 to 7 short steps, each under 25 words.${diet.guard ? '\n' + diet.guard : ''}
+Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
     try {
-      const text = await apiFetch(prompt, 400);
+      const text = await apiFetch(prompt, 1200);
       const recipe = parseJson(text);
-      updateMeal(id, { steps: recipe.steps || [], prepTime: recipe.prepTime || 20 });
-    } catch {}
+      const steps = Array.isArray(recipe.steps) ? recipe.steps.filter(Boolean) : [];
+      if (!steps.length) throw new Error('No steps returned');
+      updateMeal(id, { steps, prepTime: recipe.prepTime || 20 });
+      setStepsStatus(s => { const n = { ...s }; delete n[id]; return n; });
+    } catch (e) {
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 2500));
+        return generateSteps(id, name, slot, attempt + 1);
+      }
+      console.warn('Could not write steps for', name, e);
+      setStepsStatus(s => ({ ...s, [id]: 'error' }));
+    }
   };
 
   const buildWeek = async () => {
@@ -327,7 +342,10 @@ Respond ONLY with this exact JSON structure, no other text:
       setBuilding(false);
 
       // Generate steps in background for new meals
-      newMealRecords.forEach(m => generateSteps(m.id, m.name, m.slot));
+      // Spaced out so the AI is not flooded with requests all at once
+      newMealRecords.forEach((m, i) => {
+        setTimeout(() => generateSteps(m.id, m.name, m.slot), i * 1500);
+      });
 
       // Fetch photos for ALL meals in the plan in the background
       if (unsplashKey) {
@@ -647,10 +665,20 @@ Respond ONLY with this exact JSON structure, no other text:
               </>
             ) : (
               <div className="card-flat" style={{ textAlign: 'center' }}>
-                <p className="text-sm text-muted mb-8">No recipe steps yet.</p>
-                <Button variant="ghost" size="sm" onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}>
-                  <Icon name="sparkles" size={14} /> Generate steps
-                </Button>
+                {stepsStatus[recipe.id] === 'loading' ? (
+                  <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>Writing the steps, give me a few seconds...</p>
+                ) : (
+                  <>
+                    <p className="text-sm mb-8" style={{ color: stepsStatus[recipe.id] === 'error' ? 'var(--danger)' : 'var(--text-secondary)' }}>
+                      {stepsStatus[recipe.id] === 'error'
+                        ? "Couldn't write the steps that time. Check your beta key in Settings, then try again."
+                        : 'No recipe steps yet.'}
+                    </p>
+                    <Button variant="ghost" size="sm" onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}>
+                      <Icon name="sparkles" size={14} /> {stepsStatus[recipe.id] === 'error' ? 'Try again' : 'Generate steps'}
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>
