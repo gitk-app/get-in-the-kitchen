@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { STORES, SEED_MEALS } from '../data/meals';
+import {
+  STORES, STORE_SUGGESTIONS, SEED_MEALS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, MEAL_TYPES,
+  HOUSEHOLD_OPTIONS as HOUSEHOLD, SHOP_FREQ_OPTIONS as FREQ_OPTIONS,
+  PROTEIN_OPTIONS as PROTEIN_GROUPS, getBlockedReason,
+} from '../data/meals';
 
 // ---------------------------------------------------------------------------
 // GET IN THE KITCHEN - Onboarding v2
@@ -26,57 +30,7 @@ const C = {
   allergyBg: '#FDECEA',
 };
 
-const HOUSEHOLD = [
-  { value: '1', num: '1', label: 'Just me' },
-  { value: '2', num: '2', label: 'Two of us' },
-  { value: '3-4', num: '3-4', label: 'The family' },
-  { value: '5+', num: '5+', label: 'Full house' },
-];
-
 const BUDGET_PRESETS = ['300', '400', '450', '500', '600'];
-
-const FREQ_OPTIONS = [
-  { value: 'weekly', label: 'Every week', trips: 4 },
-  { value: 'biweekly', label: 'Every 2 weeks', trips: 2 },
-  { value: 'monthly', label: 'Once a month', trips: 1 },
-];
-
-const ALLERGENS = ['Peanuts', 'Tree nuts', 'Shellfish', 'Fish', 'Eggs', 'Milk or dairy', 'Wheat or gluten', 'Soy', 'Sesame'];
-const HOUSE_RULES = ['We eat everything', 'Vegetarian', 'Vegan', 'Seafood, no meat', 'No pork', 'No red meat', 'Halal', 'Kosher'];
-const HEALTH_GOALS = ['Low sodium', 'Watching sugar', 'Lower carb', 'Heart healthy'];
-
-const PROTEIN_GROUPS = [
-  { group: 'Meat and seafood', items: ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Fish', 'Shellfish', 'Lamb', 'Sausage'] },
-  { group: 'Plant and other', items: ['Eggs', 'Beans', 'Lentils', 'Chickpeas', 'Tofu', 'Greek yogurt', 'Peanut butter'] },
-];
-
-const MEAL_TYPES = [
-  'Tacos and bowls', 'Pasta', 'Sheet pan dinners', 'Soups and stews', 'Breakfast for dinner',
-  'Sandwiches and wraps', 'Rice and grain bowls', 'Slow cooker', 'Grilling', 'Stir fry',
-  'Soul food classics', 'Caribbean',
-];
-
-// Which proteins each allergy blocks
-const ALLERGY_BLOCKS = {
-  'Shellfish': ['Shellfish'],
-  'Fish': ['Fish'],
-  'Eggs': ['Eggs'],
-  'Milk or dairy': ['Greek yogurt'],
-  'Peanuts': ['Peanut butter'],
-  'Soy': ['Tofu'],
-};
-
-// Which proteins each house rule blocks
-const MEATS = ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Lamb', 'Sausage'];
-const RULE_BLOCKS = {
-  'Vegetarian': [...MEATS, 'Fish', 'Shellfish'],
-  'Vegan': [...MEATS, 'Fish', 'Shellfish', 'Eggs', 'Greek yogurt'],
-  'Seafood, no meat': MEATS,
-  'No pork': ['Pork'],
-  'No red meat': ['Beef', 'Pork', 'Lamb'],
-  'Halal': ['Pork'],
-  'Kosher': ['Pork', 'Shellfish'],
-};
 
 // Words used to screen seed meals when the AI is not available
 const ALLERGY_WORDS = {
@@ -250,7 +204,7 @@ function ChipGroup({ children }) {
 }
 
 // Inline "add your own" row. Starts as a link, opens into an input.
-function AddRow({ id, label, placeholder, onAdd, startOpen = false }) {
+function AddRow({ id, label, placeholder, onAdd, startOpen = false, suggestions = [] }) {
   const [open, setOpen] = useState(startOpen);
   const [val, setVal] = useState('');
   const add = () => {
@@ -277,6 +231,8 @@ function AddRow({ id, label, placeholder, onAdd, startOpen = false }) {
         <input
           id={id}
           value={val}
+          list={suggestions.length ? `${id}-list` : undefined}
+          autoComplete="off"
           placeholder={placeholder}
           onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add(); }}
@@ -287,6 +243,11 @@ function AddRow({ id, label, placeholder, onAdd, startOpen = false }) {
           color: C.gold, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
         }}>Add</button>
       </div>
+      {suggestions.length > 0 && (
+        <datalist id={`${id}-list`}>
+          {suggestions.map(s => <option key={s} value={s} />)}
+        </datalist>
+      )}
     </div>
   );
 }
@@ -354,7 +315,9 @@ export default function OnboardingScreen({ store, onNavigate }) {
   const [household, setHousehold] = useState(draft.household || '3-4');
   const [monthlyBudget, setMonthlyBudget] = useState(draft.monthlyBudget || '450');
   const [shopFreq, setShopFreq] = useState(draft.shopFreq || 'biweekly');
-  const [stores, setStores] = useState(draft.stores || ['Aldi', 'Walmart']);
+  const [stores, setStores] = useState(draft.stores || ['Walmart', 'Aldi']);
+  // The stores showing on her list. She can remove any of them.
+  const [storeList, setStoreList] = useState(draft.storeList || [...STORES]);
   const [hasAllergies, setHasAllergies] = useState(draft.hasAllergies ?? null);
   const [allergies, setAllergies] = useState(draft.allergies || []);
   const [houseRules, setHouseRules] = useState(draft.houseRules || []);
@@ -373,11 +336,11 @@ export default function OnboardingScreen({ store, onNavigate }) {
     if (phase !== 'questions') return;
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
-        step, household, monthlyBudget, shopFreq, stores, hasAllergies,
+        step, household, monthlyBudget, shopFreq, stores, storeList, hasAllergies,
         allergies, houseRules, healthGoals, proteins, mealTypes,
       }));
     } catch (e) { /* storage full or blocked, not a blocker */ }
-  }, [phase, step, household, monthlyBudget, shopFreq, stores, hasAllergies, allergies, houseRules, healthGoals, proteins, mealTypes]);
+  }, [phase, step, household, monthlyBudget, shopFreq, stores, storeList, hasAllergies, allergies, houseRules, healthGoals, proteins, mealTypes]);
 
   // Scroll to top on each new step
   useEffect(() => { window.scrollTo(0, 0); }, [step, phase]);
@@ -395,16 +358,7 @@ export default function OnboardingScreen({ store, onNavigate }) {
   const trips = FREQ_OPTIONS.find(f => f.value === shopFreq)?.trips || 2;
   const householdLabel = HOUSEHOLD.find(h => h.value === household)?.num || household;
 
-  const blockedBy = (protein) => {
-    for (const a of allergies) {
-      if ((ALLERGY_BLOCKS[a] || []).includes(protein)) return 'allergy';
-      if (!ALLERGENS.includes(a) && protein.toLowerCase().includes(a.toLowerCase())) return 'allergy';
-    }
-    for (const r of houseRules) {
-      if ((RULE_BLOCKS[r] || []).includes(protein)) return 'house rule';
-    }
-    return null;
-  };
+  const blockedBy = (protein) => getBlockedReason(protein, allergies, houseRules);
   const allowedProteins = proteins.filter(p => !blockedBy(p));
 
   const strictRules = houseRules.filter(r => r !== 'We eat everything');
@@ -462,7 +416,9 @@ export default function OnboardingScreen({ store, onNavigate }) {
       weekType: 'normal',
       proteins: allowedProteins,
       mealTypes,
-      customStores: stores.filter(s => !STORES.includes(s)),
+      customStores: storeList.filter(s => !STORES.includes(s)),
+      hiddenStores: STORES.filter(s => !storeList.includes(s)),
+      foodRulesVersion: 2,
     };
 
     setBudget(budget / 4);
@@ -789,31 +745,47 @@ Return ONLY a JSON array, no other text:
   }
 
   if (step === 3) {
-    const allStores = [...STORES, ...stores.filter(s => !STORES.includes(s))];
+    const addStore = (name) => {
+      const match = [...STORES, ...STORE_SUGGESTIONS].find(x => x.toLowerCase() === name.toLowerCase()) || name;
+      setStoreList(p => p.some(x => x.toLowerCase() === match.toLowerCase()) ? p : [...p, match]);
+      setStores(p => p.some(x => x.toLowerCase() === match.toLowerCase()) ? p : [...p, match]);
+    };
+    const removeStore = (name) => {
+      setStoreList(p => p.filter(x => x !== name));
+      setStores(p => p.filter(x => x !== name));
+    };
+    const suggestions = [...STORE_SUGGESTIONS, ...STORES].filter(s => !storeList.includes(s));
     host = "I'll sort your list by store so you're in and out, not wandering the aisles.";
     title = 'Where do you shop?';
-    sub = 'Pick every store you use. I can split one list across all of them.';
+    sub = "Check the ones you use. Remove any you'll never go to, and add your local spots.";
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {allStores.map(s => {
+          {storeList.map(s => {
             const on = stores.includes(s);
-            const custom = !STORES.includes(s);
             return (
-              <button key={s} type="button" onClick={() => setStores(p => toggleIn(p, s))} aria-pressed={on} style={{
-                minHeight: 56, padding: '0 4px', border: 'none', borderBottom: `1px solid ${C.border}`,
-                background: 'transparent', fontFamily: 'inherit', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <span style={{ fontSize: 16, fontWeight: 500, color: C.text }}>
-                  {s}{custom && <span style={{ fontSize: 12, color: C.sec, fontWeight: 600 }}>  (added)</span>}
-                </span>
-                <CheckBox on={on} />
-              </button>
+              <div key={s} style={{ minHeight: 56, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button type="button" onClick={() => setStores(p => toggleIn(p, s))} aria-pressed={on} style={{
+                  flex: 1, minHeight: 56, padding: '0 4px', border: 'none', background: 'transparent',
+                  fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                }}>
+                  <CheckBox on={on} />
+                  <span style={{ fontSize: 16, fontWeight: on ? 700 : 500, color: C.text }}>{s}</span>
+                </button>
+                <button type="button" onClick={() => removeStore(s)} aria-label={`Remove ${s} from my list`} style={{
+                  width: 44, height: 44, flexShrink: 0, border: 'none', borderRadius: 22, background: 'transparent',
+                  color: C.sec, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <i className="ti ti-x" style={{ fontSize: 18 }} />
+                </button>
+              </div>
             );
           })}
+          {storeList.length === 0 && (
+            <div style={{ padding: '16px 4px', fontSize: 14, color: C.sec }}>Your list is empty. Add the stores you shop at below.</div>
+          )}
         </div>
-        <AddRow id="gitk-add-store" label="Don't see your store?" placeholder="Add it here" startOpen onAdd={addUnique(setStores)} />
+        <AddRow id="gitk-add-store" label="Add your store" placeholder="Start typing, like Publix or H-E-B" startOpen suggestions={suggestions} onAdd={addStore} />
       </div>
     );
   }

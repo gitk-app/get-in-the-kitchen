@@ -1,55 +1,13 @@
-// GET IN THE KITCHEN - SettingsScreen v2.2 (matches onboarding v2)
+// GET IN THE KITCHEN - SettingsScreen v2.3 (reads shared lists from data/meals.js)
 import React, { useState, useEffect } from 'react';
 import { Icon, Button, Divider, Pill } from '../components/UI';
-import { STORES } from '../data/meals';
+import {
+  STORES, STORE_SUGGESTIONS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, MEAL_TYPES,
+  HOUSEHOLD_OPTIONS as HOUSEHOLD, SHOP_FREQ_OPTIONS as FREQ_OPTIONS,
+  PROTEIN_OPTIONS as PROTEIN_GROUPS, getBlockedReason,
+} from '../data/meals';
 
-// ---------------------------------------------------------------------------
-// These lists match OnboardingScreen.jsx so both screens save the same words
-// ---------------------------------------------------------------------------
-const ALLERGENS = ['Peanuts', 'Tree nuts', 'Shellfish', 'Fish', 'Eggs', 'Milk or dairy', 'Wheat or gluten', 'Soy', 'Sesame'];
-const HOUSE_RULES = ['We eat everything', 'Vegetarian', 'Vegan', 'Seafood, no meat', 'No pork', 'No red meat', 'Halal', 'Kosher'];
-const HEALTH_GOALS = ['Low sodium', 'Watching sugar', 'Lower carb', 'Heart healthy'];
-
-const PROTEIN_GROUPS = [
-  { group: 'Meat and seafood', items: ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Fish', 'Shellfish', 'Lamb', 'Sausage'] },
-  { group: 'Plant and other', items: ['Eggs', 'Beans', 'Lentils', 'Chickpeas', 'Tofu', 'Greek yogurt', 'Peanut butter'] },
-];
-
-const MEAL_TYPES = [
-  'Tacos and bowls', 'Pasta', 'Sheet pan dinners', 'Soups and stews', 'Breakfast for dinner',
-  'Sandwiches and wraps', 'Rice and grain bowls', 'Slow cooker', 'Grilling', 'Stir fry',
-  'Soul food classics', 'Caribbean',
-];
-
-const HOUSEHOLD = [
-  { value: '1', num: '1', label: 'Just me' },
-  { value: '2', num: '2', label: 'Two of us' },
-  { value: '3-4', num: '3-4', label: 'The family' },
-  { value: '5+', num: '5+', label: 'Full house' },
-];
-
-const FREQ_OPTIONS = [
-  { value: 'weekly', label: 'Every week', trips: 4, desc: '4 trips a month' },
-  { value: 'biweekly', label: 'Every 2 weeks', trips: 2, desc: '2 trips a month' },
-  { value: 'monthly', label: 'Once a month', trips: 1, desc: '1 big trip' },
-];
 const normalizeFreq = (f) => (f === 'twicemonth' ? 'biweekly' : f);
-
-// Same blocking logic as onboarding, so blocked proteins are locked here too
-const MEATS = ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Lamb', 'Sausage'];
-const ALLERGY_BLOCKS = {
-  'Shellfish': ['Shellfish'], 'Fish': ['Fish'], 'Eggs': ['Eggs'],
-  'Milk or dairy': ['Greek yogurt'], 'Peanuts': ['Peanut butter'], 'Soy': ['Tofu'],
-};
-const RULE_BLOCKS = {
-  'Vegetarian': [...MEATS, 'Fish', 'Shellfish'],
-  'Vegan': [...MEATS, 'Fish', 'Shellfish', 'Eggs', 'Greek yogurt'],
-  'Seafood, no meat': MEATS,
-  'No pork': ['Pork'],
-  'No red meat': ['Beef', 'Pork', 'Lamb'],
-  'Halal': ['Pork'],
-  'Kosher': ['Pork', 'Shellfish'],
-};
 
 // ---------------------------------------------------------------------------
 // One-time cleanup for people who set things up before onboarding v2
@@ -248,16 +206,7 @@ export default function SettingsScreen({ store }) {
   const addGoal = (v) => setFoodRules({ healthGoals: uniq([...healthGoals, v]) });
 
   // ----- Proteins -----
-  const blockedBy = (protein) => {
-    for (const a of allergies) {
-      if ((ALLERGY_BLOCKS[a] || []).includes(protein)) return 'allergy';
-      if (!ALLERGENS.includes(a) && protein.toLowerCase().includes(a.toLowerCase())) return 'allergy';
-    }
-    for (const r of houseRules) {
-      if ((RULE_BLOCKS[r] || []).includes(protein)) return 'house rule';
-    }
-    return null;
-  };
+  const blockedBy = (protein) => getBlockedReason(protein, allergies, houseRules);
   const toggleProtein = (p) => setPrefs(prev => ({ ...prev, proteins: prev.proteins?.includes(p) ? prev.proteins.filter(x => x !== p) : [...(prev.proteins || []), p] }));
   const addProtein = (v) => setPrefs(prev => ({ ...prev, proteins: uniq([...(prev.proteins || []), v]) }));
 
@@ -269,12 +218,27 @@ export default function SettingsScreen({ store }) {
   const toggleStore = (s) => setPrefs(p => ({ ...p, stores: (p.stores || []).includes(s) ? p.stores.filter(x => x !== s) : [...(p.stores || []), s] }));
   const addCustomStore = () => {
     if (!newStore.trim()) return;
-    const name = newStore.trim();
-    setPrefs(p => ({ ...p, stores: (p.stores || []).includes(name) ? p.stores : [...(p.stores || []), name], customStores: uniq([...(p.customStores || []), name]) }));
+    const typed = newStore.trim();
+    const name = [...STORES, ...STORE_SUGGESTIONS].find(x => x.toLowerCase() === typed.toLowerCase()) || typed;
+    setPrefs(p => ({
+      ...p,
+      stores: uniq([...(p.stores || []), name]),
+      customStores: STORES.includes(name) ? (p.customStores || []) : uniq([...(p.customStores || []), name]),
+      hiddenStores: (p.hiddenStores || []).filter(s => s !== name),
+    }));
     setNewStore('');
   };
-  const removeCustomStore = (name) => setPrefs(p => ({ ...p, stores: (p.stores || []).filter(s => s !== name), customStores: (p.customStores || []).filter(s => s !== name) }));
-  const allStores = uniq([...STORES, ...(prefs?.customStores || []), ...(prefs?.stores || [])]);
+  // Removes any store from her list, including the starter ones
+  const removeStore = (name) => setPrefs(p => ({
+    ...p,
+    stores: (p.stores || []).filter(s => s !== name),
+    customStores: (p.customStores || []).filter(s => s !== name),
+    hiddenStores: STORES.includes(name) ? uniq([...(p.hiddenStores || []), name]) : (p.hiddenStores || []),
+  }));
+  const hidden = prefs?.hiddenStores || [];
+  const allStores = uniq([...STORES.filter(s => !hidden.includes(s)), ...(prefs?.customStores || []), ...(prefs?.stores || [])])
+    .filter(s => s !== 'Other' || (prefs?.stores || []).includes('Other'));
+  const storeSuggestions = [...STORE_SUGGESTIONS, ...STORES].filter(s => !allStores.includes(s));
 
   // ----- Summary tiles -----
   const foodRulesSummary = (() => {
@@ -457,30 +421,33 @@ export default function SettingsScreen({ store }) {
 
       {editSheet === 'stores' && (
         <EditSheet title="Where do you shop?" onClose={() => setEditSheet(null)}>
-          <p className="text-sm mb-12">Turn on every store you use.</p>
+          <p className="text-sm mb-12">Turn on the stores you use. Tap the X to take a store off your list.</p>
           {allStores.map(s => {
             const on = (prefs?.stores || []).includes(s);
-            const custom = !STORES.includes(s);
             return (
-              <div key={s} className="flex justify-between items-center" style={{ padding: '12px 0', borderBottom: '0.5px solid var(--border)' }}>
-                <div className="flex items-center gap-8">
-                  <span style={{ fontSize: 14 }}>{s}</span>
-                  {custom && (
-                    <button onClick={() => removeCustomStore(s)} aria-label={`Remove ${s}`} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4 }}>
-                      <Icon name="x" size={13} />
-                    </button>
-                  )}
-                </div>
-                <button onClick={() => toggleStore(s)} role="switch" aria-checked={on} aria-label={s}
-                  style={{ width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', background: on ? 'var(--teal)' : 'var(--border-strong)', transition: 'background .2s' }}>
+              <div key={s} className="flex justify-between items-center" style={{ padding: '8px 0', borderBottom: '0.5px solid var(--border)', gap: 8 }}>
+                <span style={{ fontSize: 14, flex: 1, fontWeight: on ? 600 : 400 }}>{s}</span>
+                <button onClick={() => toggleStore(s)} role="switch" aria-checked={on} aria-label={`Use ${s}`}
+                  style={{ width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, background: on ? 'var(--teal)' : 'var(--border-strong)', transition: 'background .2s' }}>
                   <div style={{ width: 20, height: 20, borderRadius: '50%', background: on ? 'var(--gold)' : '#fff', position: 'absolute', top: 3, transition: 'left .2s', left: on ? 21 : 3 }} />
+                </button>
+                <button onClick={() => removeStore(s)} aria-label={`Remove ${s} from my list`}
+                  style={{ width: 40, height: 40, flexShrink: 0, background: 'none', border: 'none', borderRadius: 20, cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="x" size={16} />
                 </button>
               </div>
             );
           })}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 20 }}>
-            <input value={newStore} onChange={e => setNewStore(e.target.value)} placeholder="Add a store" onKeyDown={e => e.key === 'Enter' && addCustomStore()} style={{ flex: 1, height: 40, fontSize: 13 }} />
+          {allStores.length === 0 && (
+            <p className="text-sm" style={{ padding: '12px 0' }}>Your list is empty. Add the stores you shop at below.</p>
+          )}
+          <label htmlFor="settings-add-store" style={{ marginTop: 14 }}>Add your store</label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <input id="settings-add-store" list="settings-store-list" autoComplete="off" value={newStore} onChange={e => setNewStore(e.target.value)} placeholder="Start typing, like Publix or H-E-B" onKeyDown={e => e.key === 'Enter' && addCustomStore()} style={{ flex: 1, height: 40, fontSize: 13 }} />
             <button onClick={addCustomStore} style={{ background: 'var(--teal)', color: 'var(--gold)', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Add</button>
+            <datalist id="settings-store-list">
+              {storeSuggestions.map(s => <option key={s} value={s} />)}
+            </datalist>
           </div>
           <Button variant="primary" onClick={() => setEditSheet(null)}>Done</Button>
         </EditSheet>

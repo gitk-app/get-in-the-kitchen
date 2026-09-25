@@ -212,10 +212,85 @@ export const PLAN_SLOTS = ['Breakfast', 'Lunch', 'Dinner'];
 export const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export const PANTRY_CATEGORIES = ['Produce', 'Vegetables', 'Dairy', 'Meat', 'Fish/Seafood', 'Pantry Staples', 'Frozen'];
-export const STORES = ['Aldi', 'Walmart', 'Costco', "Sam's Club", 'Trader Joe\'s', 'Kroger', 'Other'];
+// Starter stores: national chains most people can reach.
+// Users can remove any of these and add their own.
+export const STORES = ['Walmart', 'Target', 'Aldi', 'Costco', "Sam's Club"];
 
-// Shared protein list. Matches onboarding, Settings, and Build My Week.
+// Suggestions that pop up as she types a store name. Not shown unless she searches.
+export const STORE_SUGGESTIONS = [
+  'Publix', 'Kroger', 'H-E-B', 'Wegmans', 'Food Lion', 'Winn-Dixie', 'Harris Teeter', 'Piggly Wiggly',
+  'Safeway', 'Albertsons', 'Vons', 'Ralphs', 'Fred Meyer', 'King Soopers', 'Smith\'s', 'Fry\'s',
+  'Meijer', 'Hy-Vee', 'Jewel-Osco', 'Giant', 'Giant Eagle', 'Stop & Shop', 'ShopRite', 'Acme',
+  'Hannaford', 'Market Basket', 'Price Chopper', 'WinCo', 'Food 4 Less', 'Save A Lot', 'Lidl',
+  'Sprouts', 'Whole Foods', "Trader Joe's", 'BJ\'s', 'Dollar General', 'Family Dollar',
+  'Walmart Neighborhood Market', 'Ingles', 'Bi-Lo', 'Weis', 'Schnucks', 'Dillons', 'Stater Bros',
+];
+
+// ---------------------------------------------------------------------------
+// Shared lists. Onboarding, Settings, and Build My Week all read from here,
+// so a change in this file shows up everywhere at once.
+// ---------------------------------------------------------------------------
+
 export const PROTEIN_OPTIONS = [
   { group: 'Meat and seafood', items: ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Fish', 'Shellfish', 'Lamb', 'Sausage'] },
   { group: 'Plant and other', items: ['Eggs', 'Beans', 'Lentils', 'Chickpeas', 'Tofu', 'Greek yogurt', 'Peanut butter'] },
 ];
+
+export const ALLERGENS = ['Peanuts', 'Tree nuts', 'Shellfish', 'Fish', 'Eggs', 'Milk or dairy', 'Wheat or gluten', 'Soy', 'Sesame'];
+
+export const HOUSE_RULES = ['We eat everything', 'Vegetarian', 'Vegan', 'Seafood, no meat', 'No pork', 'No red meat', 'Halal', 'Kosher'];
+
+export const HEALTH_GOALS = ['Low sodium', 'Watching sugar', 'Lower carb', 'Heart healthy'];
+
+export const MEAL_TYPES = [
+  'Tacos and bowls', 'Pasta', 'Sheet pan dinners', 'Soups and stews', 'Breakfast for dinner',
+  'Sandwiches and wraps', 'Rice and grain bowls', 'Slow cooker', 'Grilling', 'Stir fry',
+  'Soul food classics', 'Caribbean',
+];
+
+export const HOUSEHOLD_OPTIONS = [
+  { value: '1', num: '1', label: 'Just me' },
+  { value: '2', num: '2', label: 'Two of us' },
+  { value: '3-4', num: '3-4', label: 'The family' },
+  { value: '5+', num: '5+', label: 'Full house' },
+];
+
+export const SHOP_FREQ_OPTIONS = [
+  { value: 'weekly', label: 'Every week', trips: 4, desc: '4 trips a month' },
+  { value: 'biweekly', label: 'Every 2 weeks', trips: 2, desc: '2 trips a month' },
+  { value: 'monthly', label: 'Once a month', trips: 1, desc: '1 big trip' },
+];
+
+// Which proteins get locked by an allergy or a house rule
+const MEATS = ['Chicken', 'Ground turkey', 'Beef', 'Pork', 'Lamb', 'Sausage'];
+
+export const ALLERGY_PROTEIN_BLOCKS = {
+  'Shellfish': ['Shellfish'],
+  'Fish': ['Fish'],
+  'Eggs': ['Eggs'],
+  'Milk or dairy': ['Greek yogurt'],
+  'Peanuts': ['Peanut butter'],
+  'Soy': ['Tofu'],
+};
+
+export const RULE_PROTEIN_BLOCKS = {
+  'Vegetarian': [...MEATS, 'Fish', 'Shellfish'],
+  'Vegan': [...MEATS, 'Fish', 'Shellfish', 'Eggs', 'Greek yogurt'],
+  'Seafood, no meat': MEATS,
+  'No pork': ['Pork'],
+  'No red meat': ['Beef', 'Pork', 'Lamb'],
+  'Halal': ['Pork'],
+  'Kosher': ['Pork', 'Shellfish'],
+};
+
+// Returns 'allergy', 'house rule', or null
+export function getBlockedReason(protein, allergies = [], houseRules = []) {
+  for (const a of allergies) {
+    if ((ALLERGY_PROTEIN_BLOCKS[a] || []).includes(protein)) return 'allergy';
+    if (!ALLERGENS.includes(a) && protein.toLowerCase().includes(String(a).toLowerCase())) return 'allergy';
+  }
+  for (const r of houseRules) {
+    if ((RULE_PROTEIN_BLOCKS[r] || []).includes(protein)) return 'house rule';
+  }
+  return null;
+}

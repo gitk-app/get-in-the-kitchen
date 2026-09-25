@@ -9,6 +9,10 @@ const STORE_COLORS = {
   "Sam's Club": { bg: '#fef2f2', border: '#fca5a5', label: '#991b1b', bar: '#ef4444' },
   "Trader Joe's": { bg: '#fdf4ff', border: '#d8b4fe', label: '#6b21a8', bar: '#a855f7' },
   'Kroger': { bg: '#fff7ed', border: '#fdba74', label: '#9a3412', bar: '#f97316' },
+  'Publix': { bg: '#ecfdf5', border: '#6ee7b7', label: '#065f46', bar: '#10b981' },
+  'Target': { bg: '#fff1f2', border: '#fda4af', label: '#9f1239', bar: '#e11d48' },
+  'Food Lion': { bg: '#f0f9ff', border: '#7dd3fc', label: '#075985', bar: '#0ea5e9' },
+  'H-E-B': { bg: '#eef2ff', border: '#a5b4fc', label: '#3730a3', bar: '#6366f1' },
   'Other': { bg: '#f4f4f5', border: '#d4d4d8', label: '#52525b', bar: '#71717a' },
 };
 
@@ -17,8 +21,20 @@ function getStoreColor(s) {
   for (const [key, val] of Object.entries(STORE_COLORS)) {
     if (s.toLowerCase().includes(key.toLowerCase())) return val;
   }
-  return STORE_COLORS['Other'];
+  if (s === 'Other') return STORE_COLORS['Other'];
+  // Stores she added herself still get their own color instead of plain gray
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 997;
+  return EXTRA_COLORS[h % EXTRA_COLORS.length];
 }
+
+const EXTRA_COLORS = [
+  { bg: '#f7fee7', border: '#bef264', label: '#3f6212', bar: '#65a30d' },
+  { bg: '#ecfeff', border: '#67e8f9', label: '#155e75', bar: '#06b6d4' },
+  { bg: '#fdf2f8', border: '#f9a8d4', label: '#9d174d', bar: '#ec4899' },
+  { bg: '#fefce8', border: '#fde047', label: '#854d0e', bar: '#ca8a04' },
+  { bg: '#f5f3ff', border: '#c4b5fd', label: '#5b21b6', bar: '#8b5cf6' },
+];
 
 const STORE_DOMAINS = {
   'aldi': 'aldi.us',
