@@ -16,6 +16,62 @@ const STORE_COLORS = {
   'Other': { bg: '#f4f4f5', border: '#d4d4d8', label: '#52525b', bar: '#71717a' },
 };
 
+
+// ---------------------------------------------------------------------------
+// Grocery categories, listed in the order you walk a typical store
+// ---------------------------------------------------------------------------
+const GROCERY_CATEGORIES = [
+  { id: 'produce', label: 'Produce', icon: 'apple' },
+  { id: 'bakery', label: 'Bakery and bread', icon: 'bread' },
+  { id: 'deli', label: 'Deli', icon: 'cheese' },
+  { id: 'meat', label: 'Meat and poultry', icon: 'meat' },
+  { id: 'seafood', label: 'Seafood', icon: 'fish' },
+  { id: 'dairy', label: 'Dairy and eggs', icon: 'milk' },
+  { id: 'frozen', label: 'Frozen', icon: 'snowflake' },
+  { id: 'pantry', label: 'Pantry and shelf', icon: 'box' },
+  { id: 'snacks', label: 'Snacks', icon: 'cookie' },
+  { id: 'beverages', label: 'Beverages', icon: 'bottle' },
+  { id: 'household', label: 'Household', icon: 'spray' },
+  { id: 'other', label: 'Other', icon: 'basket' },
+  { id: 'onhand', label: 'Check your kitchen first', icon: 'home' },
+];
+const CATEGORY_BY_ID = Object.fromEntries(GROCERY_CATEGORIES.map(c => [c.id, c]));
+
+// Checked top to bottom, so specific phrases win (peanut butter before butter)
+const CATEGORY_RULES = [
+  ['onhand', /\bleftover|\bon hand\b/],
+  ['frozen', /\bfrozen\b|ice cream|popsicle|\bfrozen pizza|tater tots|waffles? \(frozen\)/],
+  ['dairy', /creamer|half and half/],
+  ['pantry', /black pepper|garlic powder|onion powder|paprika|cumin|chili powder|cinnamon|peanut butter|almond butter|\bcanned\b|\bcan of\b|\bbroth\b|\bstock\b|\bmix\b|\bsauce\b|\bsalsa\b|\boil\b|\bflour\b|\bsugar\b|\brice\b|\bpasta\b|spaghetti|macaroni|noodles?|\boats?\b|oatmeal|\bcereal\b|granola|\bhoney\b|\bsyrup\b|vinegar|ketchup|\bmayo|mustard|\bspices?\b|seasoning|\bsalt\b|pepper flakes|\bbeans\b|lentils|chickpeas|\bquinoa\b|\bgrits\b|cornmeal|bouillon|\bjelly\b|\bjam\b|tuna|baking|\bcoffee\b|\btea\b/],
+  ['beverages', /\bjuice\b|\bsoda\b|\bwater\b|sparkling|lemonade|\bpop\b|gatorade|kool-aid|\bdrinks?\b/],
+  ['snacks', /popcorn|\bchips\b|crackers|pretzels|cookies|\bcandy\b|fruit snacks|granola bars?|trail mix|\bnuts\b/],
+  ['seafood', /\bfish\b|salmon|tilapia|whiting|\bcod\b|catfish|shrimp|\bcrab|lobster|scallops?|\bclams?\b|mussels|oysters|crawfish/],
+  ['deli', /\bdeli\b|lunch meat|sliced turkey|\bsalami\b|rotisserie|hummus/],
+  ['meat', /chicken|\bbeef\b|steak|ground turkey|\bturkey\b|\bpork\b|\bham\b|bacon|sausage|\blamb\b|\broast\b|brisket|\bribs?\b|meatballs|hot dogs|oxtails?|wings|drumsticks|\bgoat\b/],
+  ['dairy', /\beggs?\b|\bcheese\b|\bmilk\b|butter|yogurt|\bcream\b|sour cream|half and half|creamer/],
+  ['bakery', /\bbread\b|tortillas?|\bbuns?\b|\brolls?\b|bagels?|english muffins|pita|\bnaan\b|croissants?|pancake/],
+  ['produce', /apples?|bananas?|oranges?|lemons?|limes?|berries|strawberr|blueberr|grapes|avocados?|tomato|lettuce|spinach|kale|greens|collard|cabbage|broccoli|cauliflower|carrots?|celery|onions?|garlic|potato|peppers?|cucumbers?|zucchini|squash|mushrooms?|corn\b|green beans|herbs|cilantro|parsley|ginger|\bfruit\b|\bveggies?\b|vegetables?|salad/],
+  ['household', /paper towels?|toilet paper|napkins|\bfoil\b|plastic wrap|trash bags|detergent|dish soap|\bsoap\b|sponges?|wipes|toothpaste|shampoo|diapers/],
+];
+
+function guessCategory(name, store) {
+  if ((store || '').toLowerCase() === 'pantry') return 'onhand';
+  const n = String(name || '').toLowerCase();
+  for (const [id, re] of CATEGORY_RULES) {
+    if (re.test(n)) return id;
+  }
+  return 'other';
+}
+
+// Groups items by category in store-walk order. Checked items sink to the bottom.
+function groupByCategory(items, getCat, isDone) {
+  const groups = {};
+  items.forEach(it => { const c = getCat(it); (groups[c] = groups[c] || []).push(it); });
+  return GROCERY_CATEGORIES
+    .filter(c => groups[c.id]?.length)
+    .map(c => ({ ...c, items: [...groups[c.id]].sort((a, b) => Number(isDone(a)) - Number(isDone(b))) }));
+}
+
 function getStoreColor(s) {
   if (!s) return STORE_COLORS['Other'];
   for (const [key, val] of Object.entries(STORE_COLORS)) {
@@ -173,6 +229,12 @@ export default function GroceryScreen({ store }) {
   const [extraStore, setExtraStore] = useState('');
   const [addingExtra, setAddingExtra] = useState(false);
   const [storeOverrides, setStoreOverrides] = useState({});
+  // Category changes she makes are remembered on this device
+  const [categoryOverrides, setCategoryOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gitk_grocery_categories') || '{}'); } catch { return {}; }
+  });
+  useEffect(() => { try { localStorage.setItem('gitk_grocery_categories', JSON.stringify(categoryOverrides)); } catch {} }, [categoryOverrides]);
+  const [editingCategory, setEditingCategory] = useState(null);
   const [editingStore, setEditingStore] = useState(null);
   const [removed, setRemoved] = useState(new Set());
   const [checkedNames, setCheckedNames] = useState(new Set());
@@ -257,6 +319,7 @@ export default function GroceryScreen({ store }) {
     .filter(item => !removed.has(item.name + '|' + item.source)), [planItems, lowPantryItems, extras, removed]);
 
   const getItemStore = (item) => storeOverrides[item.name] || item.store || '';
+  const getItemCategory = (item) => categoryOverrides[item.name.toLowerCase()] || guessCategory(item.name, item.store);
 
   const byStore = useMemo(() => {
     const g = {};
@@ -283,6 +346,8 @@ export default function GroceryScreen({ store }) {
     const checked = isChecked(item.name, item.source);
     const currentStore = getItemStore(item);
     const isEditingThis = editingStore === item.name + item.source;
+    const currentCat = getItemCategory(item);
+    const isEditingCat = editingCategory === item.name + item.source;
     return (
       <div key={item.name + item.source} style={{ padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: checked ? 0.4 : 1 }}>
@@ -292,9 +357,14 @@ export default function GroceryScreen({ store }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 500, textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>{item.name}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span onClick={() => setEditingStore(isEditingThis ? null : item.name + item.source)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <span onClick={() => { setEditingStore(isEditingThis ? null : item.name + item.source); setEditingCategory(null); }} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <StoreLogo name={currentStore || 'No store'} size={13} />
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>▼</span>
+              </span>
+              <span role="button" tabIndex={0} onClick={() => { setEditingCategory(isEditingCat ? null : item.name + item.source); setEditingStore(null); }}
+                style={{ cursor: 'pointer', fontSize: 11, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: 'var(--surface)' }}>
+                <Icon name={CATEGORY_BY_ID[currentCat]?.icon || 'basket'} size={11} />{CATEGORY_BY_ID[currentCat]?.label || 'Other'}
+                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>&#9660;</span>
               </span>
               {item.source === 'pantry' && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Running low</span>}
               {item.qty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.qty}</span>}
@@ -306,12 +376,41 @@ export default function GroceryScreen({ store }) {
                 <div onClick={() => setEditingStore(null)} style={{ padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>Cancel</div>
               </div>
             )}
+            {isEditingCat && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>Move {item.name} to:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {GROCERY_CATEGORIES.map(c => {
+                    const sel = currentCat === c.id;
+                    return (
+                      <button key={c.id} type="button" onClick={() => { setCategoryOverrides(p => ({ ...p, [item.name.toLowerCase()]: c.id })); setEditingCategory(null); }}
+                        style={{ padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', fontWeight: sel ? 700 : 400, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1.5px solid ' + (sel ? 'var(--teal)' : 'var(--border)'), background: sel ? 'var(--teal-light)' : 'var(--bg-white)', color: sel ? 'var(--teal)' : 'var(--text-secondary)' }}>
+                        <Icon name={c.icon} size={12} />{c.label}
+                      </button>
+                    );
+                  })}
+                  <button type="button" onClick={() => setEditingCategory(null)} style={{ padding: '5px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', color: 'var(--text-muted)', border: '1.5px solid var(--border)', background: 'var(--bg-white)' }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
           {item.source === 'extra' && <button onClick={() => setExtras(p => p.filter(e => e.id !== item.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}><Icon name="x" size={14} /></button>}
         </div>
       </div>
     );
   };
+
+  const renderCategoryHeader = (cat, count, compact = false) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: compact ? '14px 0 2px' : '22px 0 4px' }}>
+      <div style={{ width: compact ? 24 : 28, height: compact ? 24 : 28, borderRadius: 8, background: cat.id === 'onhand' ? 'var(--gold-light)' : 'var(--teal-light)', color: cat.id === 'onhand' ? 'var(--gold-dark)' : 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon name={cat.icon} size={compact ? 13 : 15} />
+      </div>
+      <span style={{ fontSize: compact ? 13 : 14, fontWeight: 800, color: 'var(--text)' }}>{cat.label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{count}</span>
+    </div>
+  );
+
+  const isItemDone = (item) => isChecked(item.name, item.source);
 
   return (
     <div className="screen">
@@ -400,27 +499,23 @@ export default function GroceryScreen({ store }) {
         {/* All items */}
         {view === 'all' && (
           <div>
-            {planItems.filter(i => !removed.has(i.name + '|' + i.source)).length > 0 && (
-              <div className="mb-16">
-                <SectionLabel>From your meal plan</SectionLabel>
-                {planItems.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}
+            {groupByCategory(allItems, getItemCategory, isItemDone).map(group => (
+              <div key={group.id} className="mb-8">
+                {renderCategoryHeader(group, group.items.length)}
+                {group.id === 'onhand' && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 4px 36px' }}>You may already have these. Check before you buy.</div>
+                )}
+                {group.items.map(item => renderItem(item))}
               </div>
-            )}
-            {lowPantryItems.filter(i => !removed.has(i.name + '|' + i.source)).length > 0 && (
-              <div className="mb-16">
-                <SectionLabel>Running low in pantry</SectionLabel>
-                {lowPantryItems.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}
-              </div>
-            )}
-            <div className="mb-16">
+            ))}
+            <div className="mb-16" style={{ marginTop: 24, paddingTop: 16, borderTop: '0.5px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <SectionLabel>Extra items</SectionLabel>
+                <SectionLabel>Need something else?</SectionLabel>
                 <button onClick={() => setAddingExtra(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={14} /> Add item</button>
               </div>
-              {extras.filter(i => !removed.has(i.name + '|' + i.source)).length === 0 && !addingExtra && (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>Tap "+ Add item" for anything not on your meal plan</div>
+              {!addingExtra && (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 0' }}>Add anything not on your meal plan. It lands in the right aisle automatically.</div>
               )}
-              {extras.filter(i => !removed.has(i.name + '|' + i.source)).map(item => renderItem(item))}
               {addingExtra && (
                 <div className="card-flat" style={{ marginTop: 8, padding: 12 }}>
                   <div className="form-group"><input value={extraName} onChange={e => setExtraName(e.target.value)} placeholder="Item name" autoFocus onKeyDown={e => e.key === 'Enter' && addExtra()} /></div>
@@ -467,7 +562,12 @@ export default function GroceryScreen({ store }) {
                   <StoreLogo name={activeStoreTab} size={20} />
                   <span style={{ fontSize: 14, fontWeight: 700, color: getStoreColor(activeStoreTab).label }}>{byStore[activeStoreTab].length} item{byStore[activeStoreTab].length !== 1 ? 's' : ''}</span>
                 </div>
-                {byStore[activeStoreTab].map(item => renderItem(item))}
+                {groupByCategory(byStore[activeStoreTab], getItemCategory, isItemDone).map(group => (
+                  <div key={group.id}>
+                    {renderCategoryHeader(group, group.items.length, true)}
+                    {group.items.map(item => renderItem(item))}
+                  </div>
+                ))}
               </div>
             )}
             {activeStoreTab && (!byStore[activeStoreTab] || byStore[activeStoreTab].length === 0) && (
