@@ -13,6 +13,35 @@ const KEYS = {
   prefs: 'gitk_prefs',
 };
 
+const PANTRY_LOG_KEY = 'gitk_pantry_log';
+const DAY = 86400000;
+
+// Days since the timer last started (bought or restocked)
+export const pantryAge = (item) => Math.floor((Date.now() - (item.addedAt || Date.now())) / DAY);
+
+const isFresh = (item) => item.type === 'fresh' || (item.fresh && item.type !== 'frozen');
+const isShelf = (item) => item.type === 'shelf' || (!item.fresh && item.type !== 'frozen' && item.type !== 'fresh');
+
+// Should the app ask "still have this?" Fresh items: every 3 days.
+// Shelf items: after 18 days. "Still good" pushes the next ask back.
+export const pantryNeedsCheck = (item) => {
+  const since = Math.floor((Date.now() - (item.checkedAt || item.addedAt || Date.now())) / DAY);
+  if (isFresh(item)) return since >= 3;
+  if (isShelf(item)) return since >= 18;
+  return false;
+};
+
+// Keeps a simple record of used and tossed food for future waste stats
+const logPantryAction = (item, action) => {
+  try {
+    const log = JSON.parse(localStorage.getItem(PANTRY_LOG_KEY) || '[]');
+    log.unshift({ name: item.name, qty: item.qty || '', category: item.category || '', action, at: Date.now(), age: pantryAge(item) });
+    localStorage.setItem(PANTRY_LOG_KEY, JSON.stringify(log.slice(0, 1000)));
+  } catch {}
+};
+
+const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
 const loadItem = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
@@ -75,7 +104,7 @@ export default function useStore() {
 
   const currentPlan = plans['week' + activeWeek] || {};
 
-  // Stable meal operations — always read from ref, never stale
+  // Stable meal operations - always read from ref, never stale
   const addMeal = useCallback((meal) => {
     const newMeal = { id: 'm' + Date.now() + Math.random().toString(36).slice(2), favorite: false, steps: [], prepTime: 0, items: [], ...meal };
     setMeals(prev => [...prev, newMeal]);
@@ -94,7 +123,7 @@ export default function useStore() {
     setMeals(prev => prev.map(m => m.id === id ? { ...m, favorite: !m.favorite } : m));
   }, [setMeals]);
 
-  // setMealInPlan — reads activeWeekRef so it's always current even inside async loops
+  // setMealInPlan - reads activeWeekRef so it's always current even inside async loops
   const setMealInPlan = useCallback((day, slot, mealId) => {
     setPlans(prev => {
       const weekKey = 'week' + activeWeekRef.current;
@@ -104,7 +133,7 @@ export default function useStore() {
     });
   }, [setPlans]);
 
-  // setBulkPlan — sets an entire week's plan at once, avoids loop race conditions
+  // setBulkPlan - sets an entire week's plan at once, avoids loop race conditions
   const setBulkPlan = useCallback((daySlotMap) => {
     setPlans(prev => {
       const weekKey = 'week' + activeWeekRef.current;
@@ -133,16 +162,53 @@ export default function useStore() {
     return [0, 1, 2, 3].reduce((sum, w) => sum + planTotal(w), 0);
   }, [planTotal]);
 
+  // Adding something she already has restocks it instead of making a duplicate.
+  // Returns 'restocked' or 'added' so screens can say which happened.
   const addPantryItem = useCallback((item) => {
-    setPantry(prev => [...prev, { id: 'p' + Date.now(), addedAt: Date.now(), ...item }]);
+    const existing = pantryRef.current.find(p => sameName(p.name, item.name));
+    if (existing) {
+      setPantry(prev => prev.map(p => p.id === existing.id ? {
+        ...p,
+        ...item,
+        id: p.id,
+        qty: item.qty || p.qty,
+        addedAt: Date.now(),
+        checkedAt: undefined,
+      } : p));
+      return 'restocked';
+    }
+    setPantry(prev => [...prev, { id: 'p' + Date.now() + Math.random().toString(36).slice(2, 6), addedAt: Date.now(), ...item }]);
+    return 'added';
   }, [setPantry]);
 
   const removePantryItem = useCallback((id) => {
     setPantry(prev => prev.filter(item => item.id !== id));
   }, [setPantry]);
 
+  // Bought more: timer starts over today
   const restockPantryItem = useCallback((id, qty) => {
-    setPantry(prev => prev.map(item => item.id === id ? { ...item, qty, addedAt: Date.now() } : item));
+    setPantry(prev => prev.map(item => item.id === id ? { ...item, qty: qty ?? item.qty, addedAt: Date.now(), checkedAt: undefined } : item));
+  }, [setPantry]);
+
+  // Still have it and it's fine: keep the real age, just stop asking for a few days
+  const confirmPantryItem = useCallback((id) => {
+    setPantry(prev => prev.map(item => item.id === id ? { ...item, checkedAt: Date.now() } : item));
+  }, [setPantry]);
+
+  // Ate it all: remove it and note it was used
+  const markPantryUsedUp = useCallback((id) => {
+    const item = pantryRef.current.find(p => p.id === id);
+    if (item) logPantryAction(item, 'used');
+    setPantry(prev => prev.filter(p => p.id !== id));
+    return item || null;
+  }, [setPantry]);
+
+  // Went bad: remove it and note it was tossed
+  const tossPantryItem = useCallback((id) => {
+    const item = pantryRef.current.find(p => p.id === id);
+    if (item) logPantryAction(item, 'tossed');
+    setPantry(prev => prev.filter(p => p.id !== id));
+    return item || null;
   }, [setPantry]);
 
   const apiFetch = useCallback(async (prompt, maxTokens = 1000) => {
@@ -170,6 +236,7 @@ export default function useStore() {
     setActiveWeek: setActiveWeekAndRef,
     setMealInPlan, setBulkPlan, clearWeek, planTotal, monthlyTotal,
     pantry, setPantry, addPantryItem, removePantryItem, restockPantryItem,
+    confirmPantryItem, markPantryUsedUp, tossPantryItem,
     budget, setBudget,
     actuals, setActuals,
     apiKey, setApiKey, unsplashKey, setUnsplashKey,

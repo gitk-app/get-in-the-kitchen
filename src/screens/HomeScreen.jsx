@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Icon, SectionLabel } from '../components/UI';
 import { DAYS, PLAN_SLOTS } from '../data/meals';
+import { pantryNeedsCheck, pantryAge } from '../hooks/useStore';
 
 const DAYS_OF_WEEK = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -52,25 +53,11 @@ export default function HomeScreen({ store, onNavigate }) {
     return total;
   }, [meals, currentPlan]);
 
-  // Pantry alerts
-  const pantryAlerts = useMemo(() => {
-    const now = Date.now();
-    return pantry
-      .filter(p => {
-        if (p.type === 'frozen') return false;
-        if (p.type === 'fresh' || p.fresh) {
-          const age = Math.floor((now - p.addedAt) / 86400000);
-          return age >= 2;
-        }
-        return false;
-      })
-      .slice(0, 4)
-      .map(p => ({
-        name: p.name,
-        age: Math.floor((now - p.addedAt) / 86400000),
-        qty: p.qty,
-      }));
-  }, [pantry]);
+  // Pantry items that need a quick "still have it?" check
+  const pantryChecks = useMemo(() => pantry
+    .filter(pantryNeedsCheck)
+    .map(p => ({ name: p.name, age: pantryAge(p), fresh: p.type === 'fresh' || (p.fresh && p.type !== 'frozen') }))
+    .sort((a, b) => Number(b.fresh) - Number(a.fresh) || b.age - a.age), [pantry]);
 
   // Grocery list count
   const groceryCount = useMemo(() => {
@@ -89,6 +76,7 @@ export default function HomeScreen({ store, onNavigate }) {
     { value: 'weekly', trips: 4 },
     { value: 'biweekly', trips: 2 },
     { value: 'twicemonth', trips: 2 },
+    { value: 'monthly', trips: 1 },
   ];
   const trips = FREQ_OPTIONS.find(f => f.value === (prefs?.shopFreq || 'biweekly'))?.trips || 2;
   const perTrip = Math.round(monthlyBudget / trips);
@@ -125,7 +113,7 @@ export default function HomeScreen({ store, onNavigate }) {
 
         {/* Today's meals strip */}
         <div style={{ padding: '0 20px 16px' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Today — {today}</div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Today - {today}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
             {todayMeals.map(({ slot, meal }) => (
               <div key={slot} onClick={() => onNavigate('plan')}
@@ -166,23 +154,23 @@ export default function HomeScreen({ store, onNavigate }) {
           </div>
         </div>
 
-        {/* Pantry alerts */}
-        {pantryAlerts.length > 0 && (
+        {/* Pantry check-in */}
+        {pantryChecks.length > 0 && (
           <div style={{ marginBottom: 16 }}>
-            <SectionLabel>Pantry alerts</SectionLabel>
-            <div className="card" style={{ padding: 0, overflow: 'hidden', marginTop: 8 }}>
-              {pantryAlerts.map((item, i) => (
-                <div key={item.name} onClick={() => onNavigate('pantry')}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: i < pantryAlerts.length - 1 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{item.name}</div>
-                    {item.qty && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{item.qty}</div>}
+            <SectionLabel>Pantry check-in</SectionLabel>
+            <div onClick={() => onNavigate('pantry')} role="button" tabIndex={0}
+              style={{ marginTop: 8, background: '#FFFAEF', border: '1px solid #C9A84C', borderRadius: 12, padding: '14px 16px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
+                    {pantryChecks.length} item{pantryChecks.length !== 1 ? 's' : ''} need{pantryChecks.length === 1 ? 's' : ''} a quick check
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: item.age >= 4 ? '#fef2f2' : '#FFFAEF', color: item.age >= 4 ? '#991b1b' : '#7A5A10' }}>
-                    {item.age}d old
-                  </span>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {pantryChecks.slice(0, 3).map(p => `${p.name} (${p.age}d)`).join(', ')}{pantryChecks.length > 3 ? ` and ${pantryChecks.length - 3} more` : ''}
+                  </div>
                 </div>
-              ))}
+                <span style={{ flexShrink: 0, background: '#0A3D35', color: '#C9A84C', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 800 }}>Check now</span>
+              </div>
             </div>
           </div>
         )}

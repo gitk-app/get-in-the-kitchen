@@ -2,6 +2,7 @@
 import React, { useState, lazy, Suspense, useRef } from 'react';
 import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
+import { pantryNeedsCheck } from '../hooks/useStore';
 
 const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'));
 
@@ -149,7 +150,36 @@ function EditSheet({ item, onSave, onClose }) {
 }
 
 export default function PantryScreen({ store }) {
-  const { pantry, addPantryItem, removePantryItem, restockPantryItem, meals, setPantry, apiKey } = store;
+  const { pantry, addPantryItem, removePantryItem, restockPantryItem, confirmPantryItem, markPantryUsedUp, tossPantryItem, meals, setPantry, apiKey } = store;
+
+  // After "Used it up", offer to put it on the grocery list
+  const [usedUpPrompt, setUsedUpPrompt] = useState(null);
+  const usedUpTimer = useRef(null);
+  const handleUsedUp = (id) => {
+    const item = markPantryUsedUp(id);
+    if (!item) return;
+    setUsedUpPrompt(item);
+    clearTimeout(usedUpTimer.current);
+    usedUpTimer.current = setTimeout(() => setUsedUpPrompt(null), 9000);
+  };
+  const addUsedUpToGrocery = () => {
+    if (!usedUpPrompt) return;
+    try {
+      const handoff = JSON.parse(localStorage.getItem('gitk_grocery_extras') || '[]');
+      handoff.push({ name: usedUpPrompt.name, store: '', source: 'extra', id: Date.now() });
+      localStorage.setItem('gitk_grocery_extras', JSON.stringify(handoff));
+    } catch {}
+    setScanFeedback('\u2713 ' + usedUpPrompt.name + ' added to your grocery list');
+    setTimeout(() => setScanFeedback(''), 3000);
+    setUsedUpPrompt(null);
+  };
+  const handleTossed = (id) => {
+    const item = tossPantryItem(id);
+    if (item) {
+      setScanFeedback('Tossed ' + item.name + '. It happens.');
+      setTimeout(() => setScanFeedback(''), 3000);
+    }
+  };
   const fridgeInputRef = useRef(null);
 
   const [name, setName] = useState('');
@@ -173,8 +203,10 @@ export default function PantryScreen({ store }) {
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    addPantryItem({ name: name.trim(), qty: qty.trim(), category, type, fresh: type === 'fresh' });
-    setName(''); setQty(''); setScanFeedback('');
+    const result = addPantryItem({ name: name.trim(), qty: qty.trim(), category, type, fresh: type === 'fresh' });
+    setScanFeedback(result === 'restocked' ? '\u2713 ' + name.trim() + ' restocked. Timer reset to today.' : '');
+    if (result === 'restocked') setTimeout(() => setScanFeedback(''), 3000);
+    setName(''); setQty('');
   };
 
   const [scanResult, setScanResult] = useState(null);
@@ -229,7 +261,7 @@ export default function PantryScreen({ store }) {
       upcLib[result.barcode] = { name: result.name.trim(), category: result.category };
       saveUpcLibrary(upcLib);
     }
-    addPantryItem({
+    const outcome = addPantryItem({
       name: result.name.trim(),
       qty: result.qty.trim(),
       category: result.category,
@@ -237,7 +269,7 @@ export default function PantryScreen({ store }) {
       fresh: result.type === 'fresh',
     });
     setScanResult(null);
-    setScanFeedback('✓ Added: ' + result.name.trim());
+    setScanFeedback(outcome === 'restocked' ? '\u2713 Restocked: ' + result.name.trim() + '. Timer reset.' : '\u2713 Added: ' + result.name.trim());
   };
 
   const handleSaveEdit = (updatedItem) => {
@@ -294,15 +326,11 @@ export default function PantryScreen({ store }) {
     setTimeout(() => setScanFeedback(''), 3000);
   };
 
-  const freshUrgent = pantry
-    .filter(p => p.type === 'fresh' || (p.fresh && p.type !== 'frozen'))
-    .map(p => ({ ...p, age: daysOld(p.addedAt) }))
-    .filter(p => p.age >= 2);
-
-  const shelfOld = pantry
-    .filter(p => p.type === 'shelf' || (!p.fresh && p.type !== 'frozen'))
-    .map(p => ({ ...p, age: daysOld(p.addedAt) }))
-    .filter(p => p.age >= 18);
+  const isFreshItem = (p) => p.type === 'fresh' || (p.fresh && p.type !== 'frozen');
+  const needsCheck = pantry
+    .filter(pantryNeedsCheck)
+    .map(p => ({ ...p, age: daysOld(p.addedAt), fresh: isFreshItem(p) }))
+    .sort((a, b) => Number(b.fresh) - Number(a.fresh) || b.age - a.age);
 
   const canMakeNow = meals.filter(m => {
     if (!m.items?.length) return false;
@@ -572,23 +600,27 @@ export default function PantryScreen({ store }) {
             <strong>You can make:</strong> {canMakeNow.map(m => m.name).join(', ')}
           </Banner>
         )}
-        {freshUrgent.length > 0 && (
-          <Banner type="warning" icon="leaf">
-            <strong>Use soon:</strong> {freshUrgent.map(p => `${p.name} (${p.age}d old)`).join(', ')}
-          </Banner>
-        )}
-        {shelfOld.length > 0 && (
-          <div className="card mb-12">
-            <div className="flex items-center gap-8 mb-8">
-              <Icon name="help-circle" size={16} style={{ color: 'var(--warning)' }} />
-              <span className="text-sm font-bold">Still got these?</span>
+        {needsCheck.length > 0 && (
+          <div className="card mb-12" style={{ border: '1px solid var(--gold)', background: 'var(--gold-light)' }}>
+            <div className="flex items-center gap-8" style={{ marginBottom: 4 }}>
+              <Icon name="leaf" size={16} style={{ color: 'var(--gold-dark)' }} />
+              <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>Still have these?</span>
             </div>
-            {shelfOld.map(item => (
-              <div key={item.id} className="flex justify-between items-center" style={{ padding: '6px 0', borderBottom: '0.5px solid var(--border)' }}>
-                <span className="text-sm">{item.name} ({item.age}d)</span>
-                <div className="flex gap-8">
-                  <Button variant="ghost" size="sm" onClick={() => restockPantryItem(item.id, item.qty)}>Still have it</Button>
-                  <Button variant="ghost" size="sm" onClick={() => removePantryItem(item.id)}>Used it up</Button>
+            <p className="text-sm" style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>A quick check keeps your pantry and your meal ideas accurate.</p>
+            {needsCheck.map(item => (
+              <div key={item.id} style={{ padding: '10px 0', borderTop: '0.5px solid var(--border)' }}>
+                <div className="flex items-center gap-8" style={{ flexWrap: 'wrap', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</span>
+                  {item.qty && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>({item.qty})</span>}
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: item.fresh && item.age >= 5 ? '#fef2f2' : 'var(--bg-white)', color: item.fresh && item.age >= 5 ? '#991b1b' : 'var(--gold-dark)' }}>
+                    {item.age}d old
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <CheckButton label="Still good" icon="check" onClick={() => confirmPantryItem(item.id)} />
+                  <CheckButton label="Restocked" icon="refresh" onClick={() => restockPantryItem(item.id)} />
+                  <CheckButton label="Used it up" icon="tools-kitchen-2" onClick={() => handleUsedUp(item.id)} />
+                  {item.fresh && <CheckButton label="Tossed it" icon="trash" onClick={() => handleTossed(item.id)} />}
                 </div>
               </div>
             ))}
@@ -611,18 +643,48 @@ export default function PantryScreen({ store }) {
                       {item.qty && <span className="text-xs text-muted">({item.qty})</span>}
                       <FreshnessBadge item={item} />
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>Tap to edit</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>Tap to edit</div>
                   </div>
-                  <button onClick={() => removePantryItem(item.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+                  <button onClick={() => removePantryItem(item.id)} aria-label={`Delete ${item.name} (added by mistake)`} title="Delete (added by mistake)"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 8 }}>
                     <Icon name="trash" size={16} />
                   </button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 12px 10px' }}>
+                  {isFreshItem(item) && <CheckButton small label="Restocked" icon="refresh" onClick={() => restockPantryItem(item.id)} />}
+                  <CheckButton small label="Used it up" icon="tools-kitchen-2" onClick={() => handleUsedUp(item.id)} />
+                  {isFreshItem(item) && <CheckButton small label="Tossed it" icon="trash" onClick={() => handleTossed(item.id)} />}
                 </div>
               </div>
             ))}
           </div>
         ))}
       </div>
+
+      {usedUpPrompt && (
+        <div role="status" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 'calc(var(--nav-height) + 16px)', width: 'calc(100% - 32px)', maxWidth: 520, background: 'var(--teal)', color: '#fff', borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 150, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+          <div style={{ flex: 1, fontSize: 14, lineHeight: 1.4 }}>
+            <strong>{usedUpPrompt.name}</strong> used up. Add it to your grocery list?
+          </div>
+          <button onClick={addUsedUpToGrocery} style={{ background: 'var(--gold)', color: 'var(--teal)', border: 'none', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Add to list</button>
+          <button onClick={() => setUsedUpPrompt(null)} aria-label="No thanks" style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.75)', cursor: 'pointer', padding: 6 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
     </div>
+  );
+}
+
+function CheckButton({ label, icon, onClick, small = false }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: small ? 32 : 36,
+      padding: small ? '0 10px' : '0 12px', borderRadius: 18, border: '1px solid var(--border)',
+      background: 'var(--bg-white)', color: 'var(--teal)', fontSize: small ? 12 : 13, fontWeight: 600,
+      fontFamily: 'inherit', cursor: 'pointer',
+    }}>
+      <Icon name={icon} size={small ? 13 : 14} />{label}
+    </button>
   );
 }
