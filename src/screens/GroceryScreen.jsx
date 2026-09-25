@@ -190,6 +190,25 @@ const normalizeFreq = (f) => (f === 'twicemonth' ? 'biweekly' : f);
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+// Saved grocery progress: what she checked off and removed each week, plus
+// which store she moved items to. Lives in one localStorage key.
+const PROGRESS_KEY = 'gitk_grocery_progress';
+function readProgress() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}');
+    return { weeks: p.weeks || {}, stores: p.stores || {}, extras: p.extras || [] };
+  } catch { return { weeks: {}, stores: {}, extras: [] }; }
+}
+function localDateKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function weekStartKey(offset) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay() + (offset || 0) * 7);
+  return localDateKey(d);
+}
+
 function getMonthKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
@@ -213,12 +232,15 @@ export default function GroceryScreen({ store }) {
     try { return JSON.parse(localStorage.getItem('gitk_trip_history') || '[]'); } catch { return []; }
   });
 
+  // Items she added herself are saved until she buys or removes them.
+  // Other screens can also hand items over through gitk_grocery_extras.
   const [extras, setExtras] = useState(() => {
+    const saved = readProgress().extras;
     try {
-      const p = JSON.parse(localStorage.getItem('gitk_grocery_extras') || '[]');
-      if (p.length) localStorage.removeItem('gitk_grocery_extras');
-      return p;
-    } catch { return []; }
+      const handoff = JSON.parse(localStorage.getItem('gitk_grocery_extras') || '[]');
+      if (handoff.length) localStorage.removeItem('gitk_grocery_extras');
+      return [...saved, ...handoff];
+    } catch { return saved; }
   });
 
   const [view, setView] = useState('all');
@@ -228,7 +250,7 @@ export default function GroceryScreen({ store }) {
   const [extraName, setExtraName] = useState('');
   const [extraStore, setExtraStore] = useState('');
   const [addingExtra, setAddingExtra] = useState(false);
-  const [storeOverrides, setStoreOverrides] = useState({});
+  const [storeOverrides, setStoreOverrides] = useState(() => readProgress().stores);
   // Category changes she makes are remembered on this device
   const [categoryOverrides, setCategoryOverrides] = useState(() => {
     try { return JSON.parse(localStorage.getItem('gitk_grocery_categories') || '{}'); } catch { return {}; }
@@ -238,6 +260,30 @@ export default function GroceryScreen({ store }) {
   const [editingStore, setEditingStore] = useState(null);
   const [removed, setRemoved] = useState(new Set());
   const [checkedNames, setCheckedNames] = useState(new Set());
+
+  // Checked and removed items are saved per plan week, so a refresh or
+  // closing the app mid-trip does not bring bought items back.
+  const weekKey = weekStartKey(activeWeek);
+  const [loadedWeek, setLoadedWeek] = useState(null);
+  useEffect(() => {
+    const w = readProgress().weeks[weekKey] || {};
+    setRemoved(new Set(w.removed || []));
+    setCheckedNames(new Set(w.checked || []));
+    setLoadedWeek(weekKey);
+  }, [weekKey]);
+  useEffect(() => {
+    if (loadedWeek !== weekKey) return;
+    try {
+      const p = readProgress();
+      p.weeks[weekKey] = { removed: [...removed], checked: [...checkedNames] };
+      // Keep about 6 weeks of back history, drop anything older
+      const cutoff = weekStartKey(-6);
+      Object.keys(p.weeks).forEach(k => { if (k < cutoff) delete p.weeks[k]; });
+      p.stores = storeOverrides;
+      p.extras = extras;
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(p));
+    } catch {}
+  }, [removed, checkedNames, storeOverrides, extras, loadedWeek, weekKey]);
 
   const currentYear = new Date().getFullYear();
   const currentMonthKey = getMonthKey(new Date());
@@ -259,10 +305,20 @@ export default function GroceryScreen({ store }) {
   const tripRemaining = perTripBudget - tripTotal;
   const tripOver = tripTotal > perTripBudget;
 
-  const last3Months = useMemo(() => {
+  const [monthsShown, setMonthsShown] = useState(3);
+  // How many months back her history goes (at least 3)
+  const monthsOfHistory = useMemo(() => {
+    const keys = tripHistory.map(t => t.monthKey).filter(Boolean).sort();
+    if (!keys.length) return 3;
+    const [y, m] = keys[0].split('-').map(Number);
+    const now = new Date();
+    return Math.max(3, (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m) + 1);
+  }, [tripHistory]);
+
+  const recentMonths = useMemo(() => {
     const result = [];
     const now = new Date();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < Math.min(monthsShown, monthsOfHistory); i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = getMonthKey(d);
       const label = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
@@ -270,10 +326,12 @@ export default function GroceryScreen({ store }) {
       const total = mTrips.reduce((s, t) => s + (t.total || 0), 0);
       const allStores = {};
       mTrips.forEach(t => Object.entries(t.stores || {}).forEach(([s, v]) => { allStores[s] = (allStores[s] || 0) + (parseFloat(v) || 0); }));
-      result.push({ key, label, trips: mTrips, total, allStores, budget: monthlyBudget });
+      // Use the budget she had that month if it was saved with her trips
+      const savedBudget = mTrips.find(t => t.monthlyBudget)?.monthlyBudget;
+      result.push({ key, label, trips: mTrips, total, allStores, budget: savedBudget || monthlyBudget });
     }
     return result;
-  }, [tripHistory, monthlyBudget]);
+  }, [tripHistory, monthlyBudget, monthsShown, monthsOfHistory]);
 
   const saveTrip = () => {
     if (tripTotal === 0) { alert('Enter your store totals first.'); return; }
@@ -285,13 +343,17 @@ export default function GroceryScreen({ store }) {
       stores: { ...storeTotals },
       total: tripTotal,
       budget: perTripBudget,
+      monthlyBudget,
     };
-    const updated = [t, ...tripHistory].slice(0, 50);
+    // Full history is kept. Each trip is tiny, so years of trips fit easily.
+    const updated = [t, ...tripHistory];
     setTripHistory(updated);
     localStorage.setItem('gitk_trip_history', JSON.stringify(updated));
     setStoreTotals({});
+    // Anything checked off counts as bought and stays off this week's list
+    setRemoved(prev => new Set([...prev, ...checkedNames]));
+    setExtras(prev => prev.filter(e => !checkedNames.has(e.name + '|' + e.source)));
     setCheckedNames(new Set());
-    setRemoved(new Set());
     alert('Trip saved! $' + tripTotal.toFixed(2) + ' logged.');
   };
 
@@ -334,7 +396,11 @@ export default function GroceryScreen({ store }) {
 
   const isChecked = (name, source) => checkedNames.has(name + '|' + source);
   const checkedCount = checkedNames.size;
-  const removeChecked = () => { setRemoved(prev => new Set([...prev, ...checkedNames])); setCheckedNames(new Set()); };
+  const removeChecked = () => {
+    setRemoved(prev => new Set([...prev, ...checkedNames]));
+    setExtras(prev => prev.filter(e => !checkedNames.has(e.name + '|' + e.source)));
+    setCheckedNames(new Set());
+  };
 
   const addExtra = () => {
     if (!extraName.trim()) return;
@@ -419,7 +485,7 @@ export default function GroceryScreen({ store }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>GROCERY LIST</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={() => setShowHistory(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600 }}>History</button>
+            <button onClick={() => { setMonthsShown(3); setShowHistory(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600 }}>History</button>
             <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)' }}><Icon name="settings" size={16} /></button>
           </div>
         </div>
@@ -631,8 +697,8 @@ export default function GroceryScreen({ store }) {
                   <div style={{ height: '100%', width: Math.min(100, (ytdTotal / annualBudget) * 100) + '%', background: '#16a34a', borderRadius: 3 }} />
                 </div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 12 }}>Last 3 months</div>
-              {last3Months.map((month) => {
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 12 }}>By month</div>
+              {recentMonths.map((month) => {
                 const over = month.total > month.budget;
                 return (
                   <div key={month.key} style={{ marginBottom: 20, background: 'var(--bg-white)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
@@ -671,6 +737,16 @@ export default function GroceryScreen({ store }) {
                   </div>
                 );
               })}
+              {monthsShown < monthsOfHistory ? (
+                <button type="button" onClick={() => setMonthsShown(n => n + 3)}
+                  style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-white)', color: 'var(--teal)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+                  Show earlier months
+                </button>
+              ) : (
+                <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', padding: '4px 0 8px' }}>
+                  That's everything saved on this device.
+                </div>
+              )}
             </div>
           </div>
         </>
