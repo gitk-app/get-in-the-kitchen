@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Icon, SectionLabel } from '../components/UI';
 import { DAYS, PLAN_SLOTS } from '../data/meals';
 import { pantryNeedsCheck, pantryAge } from '../hooks/useStore';
+import { Host, HostAction } from '../components/Host';
 
 const DAYS_OF_WEEK = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -21,7 +22,9 @@ function getDateLabel() {
 }
 
 export default function HomeScreen({ store, onNavigate }) {
-  const { meals, plans, activeWeek, pantry, prefs, budget } = store;
+  const { meals, plans, activeWeek, pantry, prefs, budget, setPrefs } = store;
+  const firstName = String(prefs?.userName || '').trim().split(/\s+/)[0] || '';
+  const [nameInput, setNameInput] = useState('');
 
   const monthlyBudget = prefs?.monthlyBudget || budget * 4;
   const today = getTodayName();
@@ -83,6 +86,59 @@ export default function HomeScreen({ store, onNavigate }) {
 
   const slots = ['Breakfast', 'Lunch', 'Dinner'];
 
+  // The host picks the one thing most worth saying today
+  const hostNote = (() => {
+    if (!firstName) return { key: 'name' };
+    const oldFresh = pantryChecks.find(p => p.fresh && p.age >= 5);
+    if (oldFresh) {
+      return {
+        text: `${firstName}, your ${oldFresh.name.toLowerCase()} is ${oldFresh.age} days old. Want to use it tonight, or should we check the pantry?`,
+        actions: [{ label: 'Check pantry', tab: 'pantry' }],
+      };
+    }
+    const hasPlan = Object.values(currentPlan).some(day => day && Object.values(day).some(Boolean));
+    if (!hasPlan) {
+      return {
+        text: `No plan for this week yet, ${firstName}. Want me to build one around your budget?`,
+        actions: [{ label: 'Build my week', tab: 'plan' }],
+      };
+    }
+    if (monthOver) {
+      return {
+        text: `We went $${Math.abs(monthRemaining).toFixed(0)} over this month. No stress. Let's lean on what's already in the pantry for a few meals.`,
+        actions: [{ label: 'See my pantry', tab: 'pantry' }],
+      };
+    }
+    const dinner = todayMeals.find(t => t.slot === 'Dinner')?.meal;
+    const dayOfMonth = new Date().getDate();
+    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    if (monthSpent > 0 && dayOfMonth >= 20 && monthRemaining > 0) {
+      return {
+        text: `$${monthRemaining.toFixed(0)} left with ${daysInMonth - dayOfMonth} days to go this month. You're doing great, ${firstName}!`,
+        actions: dinner ? [{ label: "Tonight's dinner", tab: 'plan' }] : [],
+      };
+    }
+    if (dinner) {
+      return {
+        text: `Tonight's dinner is ${dinner.name}. ${dinner.steps?.length ? "The recipe's ready when you are." : "I can write the recipe when you're ready."}`,
+        actions: [{ label: 'See the plan', tab: 'plan' }],
+      };
+    }
+    return {
+      text: groceryCount > 0
+        ? `Your grocery list has ${groceryCount} items, and your next trip budget is $${perTrip}. You've got this.`
+        : `Everything's in order, ${firstName}. Want to look over your week?`,
+      actions: [{ label: groceryCount > 0 ? 'Grocery list' : 'My week', tab: groceryCount > 0 ? 'grocery' : 'plan' }],
+    };
+  })();
+
+  const saveName = () => {
+    const v = nameInput.trim();
+    if (!v) return;
+    setPrefs(p => ({ ...p, userName: v }));
+    setNameInput('');
+  };
+
   return (
     <div className="screen">
       {/* ── TEAL HERO ── */}
@@ -90,10 +146,32 @@ export default function HomeScreen({ store, onNavigate }) {
         {/* Top bar */}
         <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 2 }}>{getGreeting()}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 2 }}>{getGreeting()}{firstName ? ', ' + firstName : ''}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 10 }}>{getDateLabel()}</div>
           </div>
           <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 36, height: 36, borderRadius: 10 }} />
+        </div>
+
+        {/* The host's check-in */}
+        <div style={{ padding: '0 20px 16px' }}>
+          {hostNote.key === 'name' ? (
+            <Host quick onDark text="Hey! Before we go further, what should I call you?">
+              <div style={{ display: 'flex', gap: 8 }}>
+                <label htmlFor="home-name" style={{ position: 'absolute', left: -9999 }}>Your first name</label>
+                <input id="home-name" value={nameInput} onChange={e => setNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveName(); }}
+                  placeholder="Your first name" autoComplete="given-name" maxLength={40}
+                  style={{ flex: 1, height: 38, fontSize: 14 }} />
+                <HostAction onClick={saveName}>Save</HostAction>
+              </div>
+            </Host>
+          ) : (
+            <Host quick onDark text={hostNote.text}>
+              {hostNote.actions?.length > 0 && hostNote.actions.map(a => (
+                <HostAction key={a.label} onClick={() => onNavigate(a.tab)}>{a.label}</HostAction>
+              ))}
+            </Host>
+          )}
         </div>
 
         {/* Budget row */}

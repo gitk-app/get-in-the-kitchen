@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Host, HostAvatar as Avatar, HOST_NAME } from '../components/Host';
 import {
   STORES, STORE_SUGGESTIONS, SEED_MEALS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, MEAL_TYPES,
   HOUSEHOLD_OPTIONS as HOUSEHOLD, SHOP_FREQ_OPTIONS as FREQ_OPTIONS,
@@ -8,10 +9,9 @@ import {
 // ---------------------------------------------------------------------------
 // GET IN THE KITCHEN - Onboarding v2
 // Welcome, 7 question steps, a "building your kitchen" moment, and a reveal.
-// Change HOST_NAME here to rename the avatar everywhere.
+// The host's name and look live in components/Host.jsx.
 // ---------------------------------------------------------------------------
 
-const HOST_NAME = 'Michele';
 const DRAFT_KEY = 'gitk_onboarding_draft';
 
 const C = {
@@ -106,56 +106,6 @@ function AnimStyles() {
         .gitk-text { animation: none; opacity: 1; }
       }
     `}</style>
-  );
-}
-
-// Placeholder host avatar. Swap this SVG for the final illustration later.
-function Avatar({ size = 48, ring = 2, bg = C.teal, talk = false }) {
-  const inner = Math.round(size * 0.92);
-  return (
-    <div style={{
-      width: size, height: size, flexShrink: 0, borderRadius: size / 2, background: bg,
-      border: `${ring}px solid ${C.gold}`, overflow: 'hidden', display: 'flex',
-      alignItems: 'flex-end', justifyContent: 'center', boxSizing: 'border-box',
-    }}>
-      <svg className="gitk-bob" width={inner} height={inner} viewBox="0 0 64 64" role="img" aria-label={`${HOST_NAME}, your kitchen host`}>
-        <circle cx="32" cy="26" r="17" fill="#2B1B14" />
-        <circle cx="19" cy="21" r="9" fill="#2B1B14" />
-        <circle cx="45" cy="21" r="9" fill="#2B1B14" />
-        <circle cx="32" cy="12" r="11" fill="#2B1B14" />
-        <path d="M13 64c0-11 8-19 19-19s19 8 19 19z" fill={C.gold} />
-        <rect x="28" y="38" width="8" height="10" fill="#7A4E33" />
-        <ellipse cx="32" cy="29" rx="10" ry="12" fill="#8A5A3C" />
-        <circle className="gitk-eye" cx="28" cy="27" r="1.4" fill="#2B1B14" />
-        <circle className="gitk-eye" cx="36" cy="27" r="1.4" fill="#2B1B14" />
-        <path d="M27 33q5 4 10 0" stroke="#2B1B14" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-        {talk && <ellipse className="gitk-mouth" cx="32" cy="34" rx="3.6" ry="2.6" fill="#3A1A12" />}
-      </svg>
-    </div>
-  );
-}
-
-// Host speaks: typing dots first, then her line fades in.
-function Host({ text }) {
-  return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-      <Avatar size={52} talk />
-      <div style={{
-        position: 'relative', background: '#fff', border: `1px solid ${C.border}`,
-        borderRadius: '16px 16px 16px 4px', padding: '11px 14px', fontSize: 14,
-        lineHeight: 1.45, color: C.text,
-      }}>
-        <div className="gitk-dots" aria-hidden="true" style={{
-          position: 'absolute', left: 14, top: 12, display: 'flex', gap: 4,
-          fontSize: 20, lineHeight: '10px', color: C.teal,
-        }}>
-          <span className="gitk-d">&bull;</span>
-          <span className="gitk-d" style={{ animationDelay: '0.15s' }}>&bull;</span>
-          <span className="gitk-d" style={{ animationDelay: '0.3s' }}>&bull;</span>
-        </div>
-        <div className="gitk-text">{text}</div>
-      </div>
-    </div>
   );
 }
 
@@ -314,6 +264,7 @@ export default function OnboardingScreen({ store, onNavigate }) {
   const draft = useRef(loadDraft()).current;
 
   const [step, setStep] = useState(draft.step || 0);
+  const [userName, setUserName] = useState(draft.userName || '');
   const [household, setHousehold] = useState(draft.household || '3-4');
   const [monthlyBudget, setMonthlyBudget] = useState(draft.monthlyBudget || '450');
   const [shopFreq, setShopFreq] = useState(draft.shopFreq || 'biweekly');
@@ -340,11 +291,11 @@ export default function OnboardingScreen({ store, onNavigate }) {
     if (phase !== 'questions') return;
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
-        step, household, monthlyBudget, shopFreq, stores, storeList, hasAllergies,
+        step, userName, household, monthlyBudget, shopFreq, stores, storeList, hasAllergies,
         allergies, houseRules, healthGoals, proteins, mealTypes,
       }));
     } catch (e) { /* storage full or blocked, not a blocker */ }
-  }, [phase, step, household, monthlyBudget, shopFreq, stores, storeList, hasAllergies, allergies, houseRules, healthGoals, proteins, mealTypes]);
+  }, [phase, step, userName, household, monthlyBudget, shopFreq, stores, storeList, hasAllergies, allergies, houseRules, healthGoals, proteins, mealTypes]);
 
   // Scroll to top on each new step
   useEffect(() => { window.scrollTo(0, 0); }, [step, phase]);
@@ -358,6 +309,7 @@ export default function OnboardingScreen({ store, onNavigate }) {
   }, [phase]);
 
   // ----- Derived values -----
+  const firstName = userName.trim().split(/\s+/)[0] || '';
   const mb = parseFloat(monthlyBudget) || 0;
   const trips = FREQ_OPTIONS.find(f => f.value === shopFreq)?.trips || 2;
   const householdLabel = HOUSEHOLD.find(h => h.value === household)?.num || household;
@@ -423,6 +375,7 @@ export default function OnboardingScreen({ store, onNavigate }) {
       ...allergies.map(a => `${a} allergy`),
     ];
     const prefs = {
+      userName: userName.trim(),
       householdSize: household,
       dietary,
       allergies,
@@ -587,7 +540,7 @@ Return ONLY a JSON array, no other text:
         <AnimStyles />
         <div style={{ width: '100%', maxWidth: 480, padding: '32px 24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           <Host text={usedAI
-            ? "Here's what I made for you. Every one fits your budget and your house rules."
+            ? `Here's what I made for you${firstName ? ', ' + firstName : ''}. Every one fits your budget and your house rules.`
             : "Here are some starter meals to get you going. Add your access code in Settings and I'll make them just for you."} />
           <Heading
             title="Your kitchen is ready."
@@ -644,8 +597,8 @@ Return ONLY a JSON array, no other text:
             <img src="/logo-icon.svg" alt="" style={{ width: 36, height: 36, borderRadius: 10 }} />
             <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: C.gold }}>GET IN THE KITCHEN</div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, paddingTop: 28 }}>
-            <Avatar size={168} ring={5} bg={C.tealMid} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, paddingTop: 12 }}>
+            <Avatar size={140} ring={5} bg={C.tealMid} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', textAlign: 'center' }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.gold }}>Hey, I'm {HOST_NAME}.</div>
               <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, lineHeight: 1.15, color: '#fff' }}>Let's get you in the kitchen.</h1>
@@ -659,8 +612,21 @@ Return ONLY a JSON array, no other text:
               <div key={t} style={{ padding: '8px 12px', borderRadius: 16, background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 13, fontWeight: 600 }}>{t}</div>
             ))}
           </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label htmlFor="gitk-name" style={{ fontSize: 14, fontWeight: 700, color: C.gold, margin: 0, textAlign: 'center' }}>First, what should I call you?</label>
+            <input
+              id="gitk-name"
+              value={userName}
+              onChange={e => setUserName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') next(); }}
+              placeholder="Your first name"
+              autoComplete="given-name"
+              maxLength={40}
+              style={{ height: 52, fontSize: 17, fontWeight: 600, textAlign: 'center', borderRadius: 14, border: 'none', background: 'rgba(255,255,255,0.95)' }}
+            />
+          </div>
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-            <PrimaryButton gold onClick={next}>Let's get cooking</PrimaryButton>
+            <PrimaryButton gold onClick={next}>{firstName ? `Let's get cooking, ${firstName}` : "Let's get cooking"}</PrimaryButton>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Takes about 2 minutes</div>
           </div>
         </div>
@@ -679,7 +645,9 @@ Return ONLY a JSON array, no other text:
   let isLast = false;
 
   if (step === 1) {
-    host = "Let's start with your crew. I'll size every recipe so there's enough, not waste.";
+    host = firstName
+      ? `Nice to meet you, ${firstName}! Let's start with your crew. I'll size every recipe so there's enough, not waste.`
+      : "Let's start with your crew. I'll size every recipe so there's enough, not waste.";
     title = 'Who are we feeding?';
     sub = 'Count everyone who eats at home most nights.';
     body = (
