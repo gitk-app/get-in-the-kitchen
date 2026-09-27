@@ -229,6 +229,27 @@ function todayKey() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+// Receipt names she has corrected are remembered on this device, so the same
+// item reads right next time (for example GVFANFEST32Z becomes her name for it)
+const RECEIPT_NAMES_KEY = 'gitk_receipt_names';
+const receiptKey = (text) => String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+function loadReceiptNames() {
+  try { return JSON.parse(localStorage.getItem(RECEIPT_NAMES_KEY) || '{}'); } catch { return {}; }
+}
+
+// Turns a grocery aisle guess into a pantry section and freshness type
+const AISLE_TO_PANTRY = {
+  produce: { category: 'Produce', type: 'fresh' },
+  meat: { category: 'Meat', type: 'fresh' },
+  deli: { category: 'Meat', type: 'fresh' },
+  seafood: { category: 'Fish/Seafood', type: 'fresh' },
+  dairy: { category: 'Dairy', type: 'fresh' },
+  frozen: { category: 'Frozen', type: 'frozen' },
+  bakery: { category: 'Pantry Staples', type: 'shelf' },
+  pantry: { category: 'Pantry Staples', type: 'shelf' },
+  beverages: { category: 'Pantry Staples', type: 'shelf' },
+};
+
 // Simple word matching so "Chicken thighs" on the list matches "Boneless chicken thighs" on the receipt
 const wordsOf = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
   .filter(w => w.length > 2).map(w => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w));
@@ -446,19 +467,23 @@ Return:
 - total: the final total paid (after tax and discounts) as a number, or null if not visible on this photo.
 - items: every purchased line item. For each:
   - receiptText: the text exactly as printed
+  - upc: the product number printed on the line, if any, otherwise empty string
   - name: a plain, simple name a home cook would use (for example "GV WHL MLK 1GAL" becomes "Whole milk")
+  - confident: true if you are sure what the item is, false if the abbreviation is a guess
   - qty: size or count if shown (like "1 gallon" or "2 lb"), otherwise empty string
   - price: the line price as a number
   - isFood: true for food and drinks, false for things like paper towels, soap, or bags
   - category: one of ${PANTRY_CATEGORIES.join(', ')}
   - type: "fresh" for perishables, "frozen" for frozen items, "shelf" for shelf-stable
 
+Receipt shorthand tips: "GV" means Great Value (Walmart's brand), "Z" or "OZ" after a number is ounces (32Z = 32 oz, about 2 lb), "CT" is a count, "PD" is often prepared deli, "HNY" is honey, "FANFEST" or "FAN FEST" is Fancy Fiesta shredded cheese. Cheese, milk, yogurt, eggs, meat, deli items, and produce are "fresh" unless the line says frozen.
 Skip tax lines, subtotals, coupons, discounts, payment lines, and change due. Only include what you can actually read. Do not guess.
 Respond ONLY with JSON, no other text:
-{"store":"","date":"","total":0,"items":[{"receiptText":"","name":"","qty":"","price":0,"isFood":true,"category":"Pantry Staples","type":"shelf"}]}` },
+{"store":"","date":"","total":0,"items":[{"receiptText":"","upc":"","name":"","qty":"","price":0,"isFood":true,"confident":true,"category":"Dairy","type":"fresh"}]}` },
         ],
       }], 3000);
       const r = parseReceiptJson(text);
+      const learned = loadReceiptNames();
       const newItems = (Array.isArray(r.items) ? r.items : [])
         .filter(it => it && (it.name || it.receiptText))
         .map((it, i) => ({
@@ -470,11 +495,25 @@ Respond ONLY with JSON, no other text:
           isFood: it.isFood !== false,
           category: PANTRY_CATEGORIES.includes(it.category) ? it.category : 'Pantry Staples',
           type: ['fresh', 'frozen', 'shelf'].includes(it.type) ? it.type : 'shelf',
+          upc: String(it.upc || '').replace(/\D/g, ''),
+          confident: it.confident !== false,
           // Counts toward the grocery budget. Non-food starts unchecked.
           count: it.isFood !== false,
           // Goes into the pantry (only for items that count)
           add: it.isFood !== false,
-        }));
+        }))
+        .map(it => {
+          // Use her own name for this item if she corrected it before
+          const saved = learned[receiptKey(it.receiptText)] || (it.upc && learned['UPC' + it.upc]);
+          // Also remembers if she left it out of her grocery total last time (like the kids' chips)
+          if (saved) return { ...it, ...saved, confident: true, learned: true, count: saved.count ?? saved.isFood !== false, add: saved.add ?? saved.isFood !== false };
+          // If the AI fell back to shelf but the name says fresh food, fix the pantry section
+          if (it.category === 'Pantry Staples') {
+            const guess = AISLE_TO_PANTRY[guessCategory(it.name)];
+            if (guess && guess.category !== 'Pantry Staples') return { ...it, ...guess };
+          }
+          return it;
+        });
       if (!newItems.length && !(Number(r.total) > 0)) {
         setReceiptError("I couldn't read that one. Try again with the receipt flat, in good light, and filling the photo.");
         setReceiptBusy(false);
@@ -505,7 +544,18 @@ Respond ONLY with JSON, no other text:
   };
 
   const updateReceiptItem = (key, changes) =>
-    setReceipt(prev => ({ ...prev, items: prev.items.map(it => it.key === key ? { ...it, ...changes } : it) }));
+    setReceipt(prev => ({ ...prev, items: prev.items.map(it => {
+      if (it.key !== key) return it;
+      const next = { ...it, ...changes };
+      if ('category' in changes || 'type' in changes) next.pickedSection = true;
+      // Renaming "Cheese" updates the section to Dairy, unless she already picked one
+      if ('name' in changes && !it.pickedSection) {
+        const guess = AISLE_TO_PANTRY[guessCategory(changes.name)];
+        if (guess) Object.assign(next, guess);
+      }
+      if ('name' in changes) next.confident = true;
+      return next;
+    }) }));
 
   // Grocery total = receipt total minus items she marked as not groceries,
   // including their share of any sales tax
@@ -557,6 +607,18 @@ Respond ONLY with JSON, no other text:
     const updated = [t, ...tripHistory];
     setTripHistory(updated);
     localStorage.setItem('gitk_trip_history', JSON.stringify(updated));
+
+    // Remember her names and sections for next time
+    try {
+      const learnedNow = loadReceiptNames();
+      receipt.items.forEach(it => {
+        if (!it.receiptText) return;
+        const entry = { name: it.name, category: it.category, type: it.type, isFood: it.isFood, count: it.count, add: it.add };
+        learnedNow[receiptKey(it.receiptText)] = entry;
+        if (it.upc) learnedNow['UPC' + it.upc] = entry;
+      });
+      localStorage.setItem(RECEIPT_NAMES_KEY, JSON.stringify(learnedNow));
+    } catch {}
 
     const toPantry = receipt.items.filter(it => it.count && it.add && it.isFood);
     toPantry.forEach(it => addPantryItem({ name: it.name, qty: it.qty, category: it.category, type: it.type, fresh: it.type === 'fresh' }));
@@ -959,6 +1021,12 @@ Respond ONLY with JSON, no other text:
                       aria-label="Item name" style={{ height: 34, fontSize: 14, fontWeight: 600, padding: '4px 8px' }} />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                       {it.receiptText && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{it.receiptText}</span>}
+                      {!it.confident && it.count && (
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#7A5A10', background: '#FFF1CC', border: '1px solid #EACB7E', borderRadius: 10, padding: '1px 8px' }}>Double-check this name</span>
+                      )}
+                      {it.learned && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)' }}>Remembered</span>
+                      )}
                       {it.count ? (
                         <button type="button" onClick={() => updateReceiptItem(it.key, { add: !it.add })} aria-pressed={it.add} style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700,
@@ -968,7 +1036,23 @@ Respond ONLY with JSON, no other text:
                         }}>
                           <Icon name={it.add ? 'check' : 'plus'} size={11} />{it.add ? 'Adding to pantry' : 'Add to pantry'}
                         </button>
-                      ) : (
+                      ) : null}
+                      {it.count && it.add ? (
+                        <>
+                          <select value={it.category} onChange={e => updateReceiptItem(it.key, { category: e.target.value })}
+                            aria-label={`Pantry section for ${it.name}`}
+                            style={{ width: 'auto', height: 26, padding: '0 6px', fontSize: 11, fontWeight: 600, borderRadius: 8 }}>
+                            {PANTRY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <select value={it.type} onChange={e => updateReceiptItem(it.key, { type: e.target.value })}
+                            aria-label={`Freshness for ${it.name}`}
+                            style={{ width: 'auto', height: 26, padding: '0 6px', fontSize: 11, fontWeight: 600, borderRadius: 8 }}>
+                            <option value="fresh">Fresh</option>
+                            <option value="frozen">Frozen</option>
+                            <option value="shelf">Shelf</option>
+                          </select>
+                        </>
+                      ) : it.count ? null : (
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Not groceries, left out of your total</span>
                       )}
                     </div>
