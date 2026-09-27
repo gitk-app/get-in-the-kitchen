@@ -42,6 +42,20 @@ const LIB_STYLES = `
   .gitk-meal-row:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(10, 61, 53, 0.08); }
 `;
 
+function normalizeMealName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w && !['a', 'an', 'the', 'with', 'and'].includes(w))
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+    .join(' ');
+}
+
+// How complete a meal is, so a merge keeps the best copy
+const mealScore = (m) => (m.favorite ? 8 : 0) + (m.steps?.length ? 4 : 0) + (m.items?.length ? 2 : 0) + (m.image ? 1 : 0);
+
 function parseJson(text) {
   const clean = String(text || '').replace(/```json|```/g, '').trim();
   try { return JSON.parse(clean); } catch (e) { /* trim extra text */ }
@@ -76,7 +90,7 @@ function IngredientRow({ item, index, onChange, onRemove, stores }) {
 }
 
 export default function LibraryScreen({ store }) {
-  const { meals, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals, pantry, prefs, hasPhotos, fetchPhoto } = store;
+  const { meals, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals, setPlans, pantry, prefs, hasPhotos, fetchPhoto } = store;
   const fetchMealImage = (mealName) => fetchPhoto(mealName + ' food');
 
   const [search, setSearch] = useState('');
@@ -108,6 +122,35 @@ export default function LibraryScreen({ store }) {
     if (window.confirm(`Remove "${m.name}" from your library?`)) removeMeal(m.id);
   };
   const otherMeals = filtered.filter(m => !SECTIONS.some(sec => sec.slot === m.slot));
+
+  // Find meals with the same name in the same section
+  const duplicateGroups = (() => {
+    const groups = {};
+    meals.forEach(m => { const k = m.slot + '|' + normalizeMealName(m.name); (groups[k] = groups[k] || []).push(m); });
+    return Object.values(groups).filter(g => g.length > 1);
+  })();
+  const duplicateCount = duplicateGroups.reduce((n, g) => n + g.length - 1, 0);
+
+  // Keeps the most complete copy of each meal, points the meal plan at it, removes the rest
+  const mergeDuplicates = () => {
+    const replace = {};
+    duplicateGroups.forEach(group => {
+      const keeper = [...group].sort((a, b) => mealScore(b) - mealScore(a))[0];
+      group.forEach(m => { if (m.id !== keeper.id) replace[m.id] = keeper.id; });
+    });
+    setPlans(prev => {
+      const next = {};
+      Object.entries(prev).forEach(([week, days]) => {
+        next[week] = {};
+        Object.entries(days || {}).forEach(([day, slots]) => {
+          next[week][day] = {};
+          Object.entries(slots || {}).forEach(([slotName, mealId]) => { next[week][day][slotName] = replace[mealId] || mealId; });
+        });
+      });
+      return next;
+    });
+    setMeals(prev => prev.filter(m => !replace[m.id]));
+  };
   const recipe = recipeView ? meals.find(m => m.id === recipeView) : null;
 
   const generateSteps = async (id, mealName, mealSlot) => {
@@ -202,6 +245,18 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
         <div className="mb-12">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search meals..." aria-label="Search meals" />
         </div>
+
+        {duplicateCount > 0 && (
+          <div className="banner banner-warning" style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="copy" size={15} />
+              You have {duplicateCount} duplicate meal{duplicateCount !== 1 ? 's' : ''}. Merge them to tidy up your library. Your meal plan stays the same.
+            </span>
+            <button type="button" onClick={mergeDuplicates} style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+              Merge duplicates
+            </button>
+          </div>
+        )}
 
         {/* Filter tabs */}
         <div role="tablist" aria-label="Filter meals" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 8 }}>

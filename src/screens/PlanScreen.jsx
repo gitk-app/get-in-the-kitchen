@@ -88,6 +88,19 @@ function getDietRules(prefs) {
   return { allergies, rules, goals, avoidList, blockWords, guard: lines.join('\n') };
 }
 
+// Turns a meal name into a simple form for matching, so "Chicken Taco Bowls"
+// and "chicken taco bowl" count as the same meal.
+function normalizeMealName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w && !['a', 'an', 'the', 'with', 'and'].includes(w))
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+    .join(' ');
+}
+
 function mealIsBlocked(meal, blockWords) {
   if (!blockWords.length) return false;
   const text = [meal.name || '', meal.protein || '', ...(meal.items || []).map(i => i.n || '')].join(' ').toLowerCase();
@@ -187,15 +200,30 @@ export default function PlanScreen({ store }) {
   // Writes recipe steps. Retries once, and shows an error instead of failing silently.
   const generateSteps = async (id, name, slot, attempt = 1) => {
     setStepsStatus(s => ({ ...s, [id]: 'loading' }));
-    const prompt = `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly.
+    // Meals created by Build My Week start with no ingredients or cost, so fill those in too
+    const current = store.mealsRef.current.find(m => m.id === id);
+    const needIngredients = !current?.items?.length;
+    const storeList = [...(prefs?.stores?.length ? prefs.stores : ['Walmart']), 'Pantry'].join('|');
+    const people = prefs?.householdSize || '2-3';
+    const prompt = needIngredients
+      ? `Simple home-cook recipe for "${name}" (${slot}) for ${people} people. Practical, budget-friendly.
+Write 5 to 7 short steps, each under 25 words. List the ingredients to buy, and estimate the total cost in US dollars to make it.
+For each ingredient, pick a store from: ${storeList}. Use "Pantry" for basics like salt, oil, and spices.${diet.guard ? '\n' + diet.guard : ''}
+Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"n":"ingredient","s":"store"}],"steps":["step 1","step 2","step 3"]}`
+      : `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly.
 Write 5 to 7 short steps, each under 25 words.${diet.guard ? '\n' + diet.guard : ''}
 Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
     try {
-      const text = await apiFetch(prompt, 1200);
+      const text = await apiFetch(prompt, needIngredients ? 1600 : 1200);
       const recipe = parseJson(text);
       const steps = Array.isArray(recipe.steps) ? recipe.steps.filter(Boolean) : [];
       if (!steps.length) throw new Error('No steps returned');
-      updateMeal(id, { steps, prepTime: recipe.prepTime || 20 });
+      const updates = { steps, prepTime: recipe.prepTime || 20 };
+      if (needIngredients && Array.isArray(recipe.items)) {
+        updates.items = recipe.items.filter(it => it && it.n).map(it => ({ n: String(it.n), s: String(it.s || '') }));
+        if (Number(recipe.cost) > 0) updates.cost = Math.round(Number(recipe.cost) * 100) / 100;
+      }
+      updateMeal(id, updates);
       setStepsStatus(s => { const n = { ...s }; delete n[id]; return n; });
     } catch (e) {
       if (attempt < 2) {
@@ -275,7 +303,7 @@ MEAL SIMPLICITY RULES:
 - Use meals from my saved library whenever possible.
 - Scale all meals for ${householdSize} people.
 
-Set isNew:true for meals not in my saved library.
+When you use one of MY SAVED MEALS, copy its name exactly as written. When the same meal appears on more than one day (like leftovers), use the exact same name each time. Set isNew:true for meals not in my saved library.
 Respond ONLY with this exact JSON structure, no other text:
 {"Sunday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Monday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Tuesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Wednesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Thursday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Friday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Saturday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}}}`;
     try {
@@ -295,12 +323,14 @@ Respond ONLY with this exact JSON structure, no other text:
           const fromBatch = entry?.fromBatch || false;
           const batchSource = entry?.batchSource || '';
           const batchProtein = entry?.batchProtein || '';
-          const lib = store.mealsRef.current;
-          let match = lib.find(m => m.name.toLowerCase() === name.toLowerCase() && m.slot === slot);
-          if (!match) match = lib.find(m => m.name.toLowerCase().includes(name.toLowerCase().split(' ')[0]) && m.slot === slot);
+          // Reuse a saved meal when the name matches, including meals created earlier this week
+          const key = normalizeMealName(name);
+          const lib = [...store.mealsRef.current, ...newMealRecords];
+          let match = lib.find(m => normalizeMealName(m.name) === key && m.slot === slot);
+          if (!match) match = lib.find(m => normalizeMealName(m.name) === key);
           if (match) {
             // Update existing meal with batch flags
-            if (batchCook || fromBatch) {
+            if ((batchCook || fromBatch) && !newMealRecords.includes(match)) {
               store.setMeals(prev => prev.map(m => m.id === match.id ? { ...m, batchCook, fromBatch, batchSource, batchProtein } : m));
             }
             newPlan[day][slot] = match.id;
