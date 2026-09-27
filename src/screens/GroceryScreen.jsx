@@ -29,7 +29,6 @@ const GROCERY_CATEGORIES = [
   { id: 'dairy', label: 'Dairy and eggs', icon: 'milk' },
   { id: 'frozen', label: 'Frozen', icon: 'snowflake' },
   { id: 'pantry', label: 'Pantry and shelf', icon: 'box' },
-  { id: 'snacks', label: 'Snacks', icon: 'cookie' },
   { id: 'beverages', label: 'Beverages', icon: 'bottle' },
   { id: 'household', label: 'Household', icon: 'spray' },
   { id: 'other', label: 'Other', icon: 'basket' },
@@ -44,7 +43,8 @@ const CATEGORY_RULES = [
   ['dairy', /creamer|half and half/],
   ['pantry', /black pepper|garlic powder|onion powder|paprika|cumin|chili powder|cinnamon|peanut butter|almond butter|\bcanned\b|\bcan of\b|\bbroth\b|\bstock\b|\bmix\b|\bsauce\b|\bsalsa\b|\boil\b|\bflour\b|\bsugar\b|\brice\b|\bpasta\b|spaghetti|macaroni|noodles?|\boats?\b|oatmeal|\bcereal\b|granola|\bhoney\b|\bsyrup\b|vinegar|ketchup|\bmayo|mustard|\bspices?\b|seasoning|\bsalt\b|pepper flakes|\bbeans\b|lentils|chickpeas|\bquinoa\b|\bgrits\b|cornmeal|bouillon|\bjelly\b|\bjam\b|tuna|baking|\bcoffee\b|\btea\b/],
   ['beverages', /\bjuice\b|\bsoda\b|\bwater\b|sparkling|lemonade|\bpop\b|gatorade|kool-aid|\bdrinks?\b/],
-  ['snacks', /popcorn|\bchips\b|crackers|pretzels|cookies|\bcandy\b|fruit snacks|granola bars?|trail mix|\bnuts\b/],
+  // Chips, crackers, and similar live on the shelf with pantry items
+  ['pantry', /popcorn|\bchips\b|crackers|pretzels|cookies|\bcandy\b|fruit snacks|granola bars?|trail mix|\bnuts\b/],
   ['seafood', /\bfish\b|salmon|tilapia|whiting|\bcod\b|catfish|shrimp|\bcrab|lobster|scallops?|\bclams?\b|mussels|oysters|crawfish/],
   ['deli', /\bdeli\b|lunch meat|sliced turkey|\bsalami\b|rotisserie|hummus/],
   ['meat', /chicken|\bbeef\b|steak|ground turkey|\bturkey\b|\bpork\b|\bham\b|bacon|sausage|\blamb\b|\broast\b|brisket|\bribs?\b|meatballs|hot dogs|oxtails?|wings|drumsticks|\bgoat\b/],
@@ -381,7 +381,12 @@ export default function GroceryScreen({ store }) {
     .filter(item => !removed.has(item.name + '|' + item.source)), [planItems, lowPantryItems, extras, removed]);
 
   const getItemStore = (item) => storeOverrides[item.name] || item.store || '';
-  const getItemCategory = (item) => categoryOverrides[item.name.toLowerCase()] || guessCategory(item.name, item.store);
+  const getItemCategory = (item) => {
+    const saved = categoryOverrides[item.name.toLowerCase()];
+    // Items once moved to the old Snacks section now go to Pantry and shelf
+    if (saved === 'snacks') return 'pantry';
+    return saved || guessCategory(item.name, item.store);
+  };
 
   const byStore = useMemo(() => {
     const g = {};

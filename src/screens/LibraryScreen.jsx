@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../components/UI';
-import { MEAL_SLOTS } from '../data/meals';
+import { PLAN_SLOTS } from '../data/meals';
 
 // Food rules for recipe prompts, so recipes respect allergies and house rules
 function recipeGuard(prefs) {
@@ -19,7 +19,6 @@ const SECTIONS = [
   { slot: 'Breakfast', icon: 'coffee' },
   { slot: 'Lunch', icon: 'salad' },
   { slot: 'Dinner', icon: 'tools-kitchen-2' },
-  { slot: 'Snack', icon: 'cookie' },
 ];
 
 // Each meal of the day gets its own warm color, so sections are easy to tell apart
@@ -27,7 +26,6 @@ const THEMES = {
   Breakfast: { bg: '#FFF6E0', border: '#EACB7E', accent: '#C9A84C', text: '#6B5210' },
   Lunch: { bg: '#E6F4EE', border: '#9ED0BC', accent: '#2E8A6B', text: '#0F5040' },
   Dinner: { bg: '#FCEBE2', border: '#E9B299', accent: '#C0623D', text: '#7A3418' },
-  Snack: { bg: '#F7EAF2', border: '#DDAFCB', accent: '#A64D82', text: '#6E2653' },
   Other: { bg: '#F0EBE0', border: '#D8CCB8', accent: '#7A6A52', text: '#4A3F2E' },
 };
 const themeFor = (slot) => THEMES[slot] || THEMES.Other;
@@ -94,7 +92,7 @@ export default function LibraryScreen({ store }) {
   const fetchMealImage = (mealName) => fetchPhoto(mealName + ' food');
 
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('All'); // All | Breakfast | Lunch | Dinner | Snack | Favorites
+  const [filter, setFilter] = useState('All'); // All | Breakfast | Lunch | Dinner | Favorites
   const [adding, setAdding] = useState(false);
   const [recipeView, setRecipeView] = useState(null);
   const [generatingFor, setGeneratingFor] = useState(null);
@@ -111,7 +109,9 @@ export default function LibraryScreen({ store }) {
   const [pantryCheck, setPantryCheck] = useState(null); // {missing: [], inPantry: []}
 
   const userStores = prefs?.stores || [];
-  const searched = meals.filter(m => !search || m.name.toLowerCase().includes(search.toLowerCase()));
+  // The app plans breakfast, lunch, and dinner. Older snack meals stay saved but are not shown.
+  const libraryMeals = meals.filter(m => m.slot !== 'Snack');
+  const searched = libraryMeals.filter(m => !search || m.name.toLowerCase().includes(search.toLowerCase()));
   const filtered = searched.filter(m =>
     filter === 'All' ? true : filter === 'Favorites' ? m.favorite : m.slot === filter);
   // Favorites first, then A to Z
@@ -126,7 +126,7 @@ export default function LibraryScreen({ store }) {
   // Find meals with the same name in the same section
   const duplicateGroups = (() => {
     const groups = {};
-    meals.forEach(m => { const k = m.slot + '|' + normalizeMealName(m.name); (groups[k] = groups[k] || []).push(m); });
+    libraryMeals.forEach(m => { const k = m.slot + '|' + normalizeMealName(m.name); (groups[k] = groups[k] || []).push(m); });
     return Object.values(groups).filter(g => g.length > 1);
   })();
   const duplicateCount = duplicateGroups.reduce((n, g) => n + g.length - 1, 0);
@@ -260,7 +260,7 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
 
         {/* Filter tabs */}
         <div role="tablist" aria-label="Filter meals" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 8 }}>
-          {['All', 'Breakfast', 'Lunch', 'Dinner', 'Snack', 'Favorites'].map(f => {
+          {['All', 'Breakfast', 'Lunch', 'Dinner', 'Favorites'].map(f => {
             const on = filter === f;
             return (
               <button key={f} role="tab" aria-selected={on} onClick={() => setFilter(f)} style={{
@@ -432,7 +432,7 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
               <div>
                 <label>Meal slot</label>
                 <select value={slot} onChange={e => setSlot(e.target.value)}>
-                  {MEAL_SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {PLAN_SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>

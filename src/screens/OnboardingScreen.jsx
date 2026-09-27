@@ -472,7 +472,7 @@ HOUSE RULES (strict, never break): ${rulesStr}
 
 HEALTH GOALS (lean meals this way, not a hard rule): ${goalsStr}
 
-Generate exactly 15 meals: 4 breakfasts, 4 lunches, 5 dinners, 2 snacks.
+Generate exactly 15 meals: 4 breakfasts, 5 lunches, 6 dinners. No snacks.
 All meals must be simple, budget-friendly, practical home cooking.
 ${allowedProteins.length ? 'Only use the proteins listed above.' : 'Use a variety of affordable proteins.'}
 Scale ingredients for ${household} people.
@@ -480,7 +480,7 @@ Scale ingredients for ${household} people.
 Return ONLY a JSON array, no other text:
 [{
   "name": "meal name",
-  "slot": "Breakfast|Lunch|Dinner|Snack",
+  "slot": "Breakfast|Lunch|Dinner",
   "cost": 3.50,
   "protein": "chicken|beef|pork|turkey|fish|eggs|sausage|dairy|pb|none",
   "prepTime": 20,
