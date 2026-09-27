@@ -22,6 +22,26 @@ const SECTIONS = [
   { slot: 'Snack', icon: 'cookie' },
 ];
 
+// Each meal of the day gets its own warm color, so sections are easy to tell apart
+const THEMES = {
+  Breakfast: { bg: '#FFF6E0', border: '#EACB7E', accent: '#C9A84C', text: '#6B5210' },
+  Lunch: { bg: '#E6F4EE', border: '#9ED0BC', accent: '#2E8A6B', text: '#0F5040' },
+  Dinner: { bg: '#FCEBE2', border: '#E9B299', accent: '#C0623D', text: '#7A3418' },
+  Snack: { bg: '#F7EAF2', border: '#DDAFCB', accent: '#A64D82', text: '#6E2653' },
+  Other: { bg: '#F0EBE0', border: '#D8CCB8', accent: '#7A6A52', text: '#4A3F2E' },
+};
+const themeFor = (slot) => THEMES[slot] || THEMES.Other;
+
+const LIB_STYLES = `
+  .gitk-lib-grid { display: block; }
+  @media (min-width: 768px) {
+    .gitk-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+    .gitk-lib-grid > .gitk-meal-row { margin-bottom: 0; }
+  }
+  .gitk-meal-row { transition: transform .12s, box-shadow .12s; }
+  .gitk-meal-row:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(10, 61, 53, 0.08); }
+`;
+
 function parseJson(text) {
   const clean = String(text || '').replace(/```json|```/g, '').trim();
   try { return JSON.parse(clean); } catch (e) { /* trim extra text */ }
@@ -167,11 +187,16 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
 
   return (
     <div className="screen">
+      <style>{LIB_STYLES}</style>
       <div className="screen-header">
-        <span className="screen-title">Meal library</span>
-        <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
-          <Icon name="plus" size={14} /> Add meal
-        </Button>
+        <span className="screen-title" style={{ whiteSpace: 'nowrap' }}>Meal library</span>
+        <button type="button" onClick={() => setAdding(true)} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', borderRadius: 10,
+          border: 'none', background: 'var(--teal)', color: '#fff', fontSize: 14, fontWeight: 700,
+          fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0,
+        }}>
+          <Icon name="plus" size={15} style={{ color: 'var(--gold)' }} /> Add meal
+        </button>
       </div>
       <div className="screen-padded">
         <div className="mb-12">
@@ -215,7 +240,7 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
             )}
           </>
         ) : (
-          <div className="meal-card-grid">
+          <div className="gitk-lib-grid">
             {sortMeals(filtered).map(m => <MealRow key={m.id} meal={m} onOpen={openRecipe} onFavorite={toggleFavorite} onRemove={confirmRemove} />)}
           </div>
         )}
@@ -394,16 +419,19 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
 }
 
 function LibrarySection({ title, icon, count, children }) {
+  const t = themeFor(title);
   return (
-    <section style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0 10px', borderBottom: '2px solid var(--teal)', marginBottom: 10 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--teal)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Icon name={icon} size={16} />
+    <section style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0 10px', borderBottom: `3px solid ${t.accent}`, marginBottom: 12 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 10, background: t.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name={icon} size={17} />
         </div>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>{title}</h2>
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{count} meal{count !== 1 ? 's' : ''}</span>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>{title}</h2>
+        <span style={{ fontSize: 12, fontWeight: 700, color: t.text, background: t.bg, border: `1px solid ${t.border}`, borderRadius: 12, padding: '2px 10px' }}>
+          {count} meal{count !== 1 ? 's' : ''}
+        </span>
       </div>
-      <div className="meal-card-grid">{children}</div>
+      <div className="gitk-lib-grid">{children}</div>
     </section>
   );
 }
@@ -411,34 +439,38 @@ function LibrarySection({ title, icon, count, children }) {
 // Compact meal row: small photo, name, quick facts, favorite star
 function MealRow({ meal, onOpen, onFavorite, onRemove }) {
   const m = meal;
+  const t = themeFor(m.slot);
   return (
-    <div className="card mb-8" style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="gitk-meal-row" style={{
+      padding: 8, display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8,
+      background: t.bg, border: `1px solid ${t.border}`, borderLeft: `5px solid ${t.accent}`, borderRadius: 14,
+    }}>
       <button type="button" onClick={() => onOpen(m.id)} aria-label={`Open ${m.name}`} style={{
         flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 'none',
         padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'inherit',
       }}>
-        <div style={{ width: 60, height: 60, borderRadius: 10, overflow: 'hidden', flexShrink: 0, background: 'var(--teal-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 64, height: 64, borderRadius: 11, overflow: 'hidden', flexShrink: 0, background: '#fff', border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {m.image
             ? <img src={m.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
-            : <Icon name="tools-kitchen-2" size={22} style={{ color: 'var(--teal)' }} />}
+            : <Icon name="tools-kitchen-2" size={22} style={{ color: t.accent }} />}
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{m.name}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {m.cost > 0 && <span style={{ fontWeight: 700, color: 'var(--teal)' }}>${Number(m.cost).toFixed(2)}</span>}
-            {m.prepTime > 0 && <span>{m.prepTime} min</span>}
+          <div style={{ fontSize: 12, color: t.text, marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {m.cost > 0 && <span style={{ fontWeight: 800, background: '#fff', borderRadius: 8, padding: '1px 7px' }}>${Number(m.cost).toFixed(2)}</span>}
+            {m.prepTime > 0 && <span style={{ whiteSpace: 'nowrap' }}>{m.prepTime} min</span>}
             {m.steps?.length > 0
-              ? <span>{m.steps.length} steps</span>
-              : <span style={{ color: 'var(--gold-dark)' }}>No steps yet</span>}
+              ? <span style={{ whiteSpace: 'nowrap' }}>{m.steps.length} steps</span>
+              : <span style={{ whiteSpace: 'nowrap', fontStyle: 'italic' }}>No steps yet</span>}
           </div>
         </div>
       </button>
       <button type="button" onClick={() => onFavorite(m.id)} aria-label={m.favorite ? `Remove ${m.name} from favorites` : `Add ${m.name} to favorites`} aria-pressed={!!m.favorite}
         style={{ width: 40, height: 40, flexShrink: 0, background: 'none', border: 'none', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name={m.favorite ? 'star-filled' : 'star'} size={19} style={{ color: m.favorite ? '#C9A84C' : 'var(--text-muted)' }} />
+        <Icon name={m.favorite ? 'star-filled' : 'star'} size={19} style={{ color: m.favorite ? '#C9A84C' : t.accent, opacity: m.favorite ? 1 : 0.6 }} />
       </button>
       <button type="button" onClick={() => onRemove(m)} aria-label={`Remove ${m.name}`}
-        style={{ width: 36, height: 40, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        style={{ width: 34, height: 40, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: t.text, opacity: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Icon name="trash" size={15} />
       </button>
     </div>
