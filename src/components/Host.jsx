@@ -50,8 +50,10 @@ export function HostStyles() {
 // The look itself. For now: a photo if HOST_IMAGE is set, otherwise a gold "N"
 // with the kitchen steam from the logo. Swap this for the illustration later.
 function HostFace({ size }) {
-  if (HOST_IMAGE) {
-    return <img src={HOST_IMAGE} alt={`${HOST_NAME}, your kitchen host`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
+  // If the picture can't load, fall back to the monogram instead of showing broken text
+  const [broken, setBroken] = React.useState(false);
+  if (HOST_IMAGE && !broken) {
+    return <img src={HOST_IMAGE} alt={`${HOST_NAME}, your kitchen host`} onError={() => setBroken(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
   }
   return (
     <svg className="gitk-bob" width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={`${HOST_NAME}, your kitchen host`}>
