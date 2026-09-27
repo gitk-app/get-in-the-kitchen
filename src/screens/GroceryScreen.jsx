@@ -37,6 +37,23 @@ const GROCERY_CATEGORIES = [
 ];
 const CATEGORY_BY_ID = Object.fromEntries(GROCERY_CATEGORIES.map(c => [c.id, c]));
 
+// Each aisle gets its own color, matching the Pantry and Library
+const AISLE_COLORS = {
+  produce: { bg: '#EEF7E6', border: '#B9DB9A', accent: '#5A9A2E', text: '#2F5716' },
+  bakery: { bg: '#FBF1E4', border: '#E3C49A', accent: '#B07A38', text: '#6B4516' },
+  deli: { bg: '#FBEAEE', border: '#E7B3C0', accent: '#B5506B', text: '#6E2338' },
+  meat: { bg: '#FCEBE2', border: '#E9B299', accent: '#C0623D', text: '#7A3418' },
+  seafood: { bg: '#E4F3F6', border: '#99CFDA', accent: '#23859A', text: '#0E4E5B' },
+  dairy: { bg: '#EAF2FB', border: '#AFCBEA', accent: '#3F7CC0', text: '#1D4677' },
+  frozen: { bg: '#EFEEFB', border: '#BDB8EC', accent: '#6A5FC9', text: '#352C85' },
+  pantry: { bg: '#FFF6E0', border: '#EACB7E', accent: '#C9A84C', text: '#6B5210' },
+  beverages: { bg: '#E6F6F3', border: '#9FD6CB', accent: '#2A9985', text: '#0F5448' },
+  household: { bg: '#EEF1F4', border: '#C3CCD6', accent: '#5E6E80', text: '#33404E' },
+  other: { bg: '#F0EBE0', border: '#D8CCB8', accent: '#7A6A52', text: '#4A3F2E' },
+  onhand: { bg: '#FFFAEF', border: '#C9A84C', accent: '#A88830', text: '#6B5210' },
+};
+const aisleColor = (id) => AISLE_COLORS[id] || AISLE_COLORS.other;
+
 // Checked top to bottom, so specific phrases win (peanut butter before butter)
 const CATEGORY_RULES = [
   ['onhand', /\bleftover|\bon hand\b/],
@@ -703,14 +720,19 @@ Respond ONLY with JSON, no other text:
     const isEditingThis = editingStore === item.name + item.source;
     const currentCat = getItemCategory(item);
     const isEditingCat = editingCategory === item.name + item.source;
+    const ac = aisleColor(currentCat);
     return (
-      <div key={item.name + item.source} style={{ padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: checked ? 0.4 : 1 }}>
-          <div onClick={() => toggleCheck(item.name, item.source)} style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: checked ? 'none' : '1.5px solid var(--border)', background: checked ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {checked && <Icon name="check" size={14} style={{ color: '#fff' }} />}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>{item.name}</div>
+      <div key={item.name + item.source} className="gitk-grocery-row" style={{ padding: '11px 14px', borderTop: '1px solid ' + ac.border + '66', background: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: checked ? 0.45 : 1 }}>
+          <button type="button" onClick={() => toggleCheck(item.name, item.source)} aria-pressed={checked} aria-label={(checked ? 'Uncheck ' : 'Check off ') + item.name}
+            style={{ width: 28, height: 28, borderRadius: 14, flexShrink: 0, cursor: 'pointer', border: checked ? 'none' : '2px solid ' + ac.accent, background: checked ? ac.accent : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all .15s' }}>
+            {checked && <Icon name="check" size={16} style={{ color: '#fff' }} />}
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div onClick={() => toggleCheck(item.name, item.source)} style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3, cursor: 'pointer', textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>
+              {item.name}
+              {item.qty && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginLeft: 6 }}>{item.qty}</span>}
+            </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               <span onClick={() => { setEditingStore(isEditingThis ? null : item.name + item.source); setEditingCategory(null); }} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <StoreLogo name={currentStore || 'No store'} size={13} />
@@ -721,8 +743,7 @@ Respond ONLY with JSON, no other text:
                 <Icon name={CATEGORY_BY_ID[currentCat]?.icon || 'basket'} size={11} />{CATEGORY_BY_ID[currentCat]?.label || 'Other'}
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>&#9660;</span>
               </span>
-              {item.source === 'pantry' && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Running low</span>}
-              {item.qty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.qty}</span>}
+              {item.source === 'pantry' && <span style={{ fontSize: 11, color: '#7A5A10', background: '#FFF1CC', borderRadius: 10, padding: '1px 8px', fontWeight: 700 }}>Running low</span>}
             </div>
             {isEditingThis && (
               <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -755,15 +776,26 @@ Respond ONLY with JSON, no other text:
     );
   };
 
-  const renderCategoryHeader = (cat, count, compact = false) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: compact ? '14px 0 2px' : '22px 0 4px' }}>
-      <div style={{ width: compact ? 24 : 28, height: compact ? 24 : 28, borderRadius: 8, background: cat.id === 'onhand' ? 'var(--gold-light)' : 'var(--teal-light)', color: cat.id === 'onhand' ? 'var(--gold-dark)' : 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon name={cat.icon} size={compact ? 13 : 15} />
-      </div>
-      <span style={{ fontSize: compact ? 13 : 14, fontWeight: 800, color: 'var(--text)' }}>{cat.label}</span>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{count}</span>
-    </div>
-  );
+  // One aisle: a colored header with a count of what's left, then the items in a card
+  const renderAisle = (group, note) => {
+    const c = aisleColor(group.id);
+    const left = group.items.filter(it => !isItemDone(it)).length;
+    return (
+      <section key={group.id} style={{ marginBottom: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + c.border, boxShadow: '0 1px 3px rgba(10,61,53,0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: c.bg, borderLeft: '5px solid ' + c.accent }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: c.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name={group.icon} size={16} />
+          </div>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text)', flex: 1 }}>{group.label}</h3>
+          <span style={{ fontSize: 12, fontWeight: 800, color: left === 0 ? '#fff' : c.text, background: left === 0 ? c.accent : '#fff', border: '1px solid ' + c.border, borderRadius: 12, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+            {left === 0 ? 'All done' : `${left} of ${group.items.length} left`}
+          </span>
+        </div>
+        {note && <div style={{ fontSize: 12, color: c.text, background: c.bg, padding: '0 14px 8px 59px' }}>{note}</div>}
+        {group.items.map(item => renderItem(item))}
+      </section>
+    );
+  };
 
   const isItemDone = (item) => isChecked(item.name, item.source);
 
@@ -879,15 +911,10 @@ Respond ONLY with JSON, no other text:
         {/* All items */}
         {view === 'all' && (
           <div>
-            {groupByCategory(allItems, getItemCategory, isItemDone).map(group => (
-              <div key={group.id} className="mb-8">
-                {renderCategoryHeader(group, group.items.length)}
-                {group.id === 'onhand' && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 4px 36px' }}>You may already have these. Check before you buy.</div>
-                )}
-                {group.items.map(item => renderItem(item))}
-              </div>
-            ))}
+            <div style={{ marginTop: 12 }}>
+              {groupByCategory(allItems, getItemCategory, isItemDone).map(group =>
+                renderAisle(group, group.id === 'onhand' ? 'You may already have these. Check before you buy.' : null))}
+            </div>
             <div className="mb-16" style={{ marginTop: 24, paddingTop: 16, borderTop: '0.5px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <SectionLabel>Need something else?</SectionLabel>
@@ -943,12 +970,9 @@ Respond ONLY with JSON, no other text:
                   <StoreLogo name={activeStoreTab} size={20} />
                   <span style={{ fontSize: 14, fontWeight: 700, color: getStoreColor(activeStoreTab).label }}>{byStore[activeStoreTab].length} item{byStore[activeStoreTab].length !== 1 ? 's' : ''}</span>
                 </div>
-                {groupByCategory(byStore[activeStoreTab], getItemCategory, isItemDone).map(group => (
-                  <div key={group.id}>
-                    {renderCategoryHeader(group, group.items.length, true)}
-                    {group.items.map(item => renderItem(item))}
-                  </div>
-                ))}
+                <div style={{ marginTop: 10 }}>
+                  {groupByCategory(byStore[activeStoreTab], getItemCategory, isItemDone).map(group => renderAisle(group))}
+                </div>
               </div>
             )}
             {activeStoreTab && (!byStore[activeStoreTab] || byStore[activeStoreTab].length === 0) && (
