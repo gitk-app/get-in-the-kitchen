@@ -14,6 +14,14 @@ function recipeGuard(prefs) {
   return lines.join('\n');
 }
 
+// Library sections, in the order of the day
+const SECTIONS = [
+  { slot: 'Breakfast', icon: 'coffee' },
+  { slot: 'Lunch', icon: 'salad' },
+  { slot: 'Dinner', icon: 'tools-kitchen-2' },
+  { slot: 'Snack', icon: 'cookie' },
+];
+
 function parseJson(text) {
   const clean = String(text || '').replace(/```json|```/g, '').trim();
   try { return JSON.parse(clean); } catch (e) { /* trim extra text */ }
@@ -52,6 +60,7 @@ export default function LibraryScreen({ store }) {
   const fetchMealImage = (mealName) => fetchPhoto(mealName + ' food');
 
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('All'); // All | Breakfast | Lunch | Dinner | Snack | Favorites
   const [adding, setAdding] = useState(false);
   const [recipeView, setRecipeView] = useState(null);
   const [generatingFor, setGeneratingFor] = useState(null);
@@ -68,7 +77,17 @@ export default function LibraryScreen({ store }) {
   const [pantryCheck, setPantryCheck] = useState(null); // {missing: [], inPantry: []}
 
   const userStores = prefs?.stores || [];
-  const filtered = meals.filter(m => !search || m.name.toLowerCase().includes(search.toLowerCase()));
+  const searched = meals.filter(m => !search || m.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = searched.filter(m =>
+    filter === 'All' ? true : filter === 'Favorites' ? m.favorite : m.slot === filter);
+  // Favorites first, then A to Z
+  const sortMeals = (list) => [...list].sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite) || a.name.localeCompare(b.name));
+  const countFor = (f) => f === 'All' ? searched.length : f === 'Favorites' ? searched.filter(m => m.favorite).length : searched.filter(m => m.slot === f).length;
+  const openRecipe = (id) => { setGenerateError(''); setRecipeView(id); };
+  const confirmRemove = (m) => {
+    if (window.confirm(`Remove "${m.name}" from your library?`)) removeMeal(m.id);
+  };
+  const otherMeals = filtered.filter(m => !SECTIONS.some(sec => sec.slot === m.slot));
   const recipe = recipeView ? meals.find(m => m.id === recipeView) : null;
 
   const generateSteps = async (id, mealName, mealSlot) => {
@@ -156,57 +175,52 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
       </div>
       <div className="screen-padded">
         <div className="mb-12">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search meals…" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search meals..." aria-label="Search meals" />
         </div>
 
-        {MEAL_SLOTS.map(s => {
-          const items = filtered.filter(m => m.slot === s);
-          if (!items.length) return null;
-          return (
-            <div key={s} className="mb-16">
-              <SectionLabel>{s}</SectionLabel>
-              {items.map(m => (
-                <div key={m.id} className="card mb-8" style={{ padding: 0, overflow: 'hidden' }}>
-                  {m.image && (
-                    <div style={{ height: 100, overflow: 'hidden', cursor: 'pointer' }}
-                      onClick={() => { setGenerateError(''); setRecipeView(m.id); }}>
-                      <img src={m.image} alt={m.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={e => e.target.style.display = 'none'}
-                      />
-                    </div>
-                  )}
-                  <div style={{ padding: '12px 14px' }}>
-                  <div className="flex justify-between items-start">
-                    <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => { setGenerateError(''); setRecipeView(m.id); }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>{m.name}</div>
-                      <div className="flex gap-8 flex-wrap" style={{ marginBottom: 4 }}>
-                        {m.cost > 0 && <span className="text-xs text-muted">~${m.cost.toFixed(2)}</span>}
-                        {m.prepTime > 0 && <span className="text-xs text-muted">{m.prepTime} min</span>}
-                        {m.steps?.length > 0
-                          ? <span className="text-xs" style={{ color: 'var(--teal)' }}><Icon name="check" size={11} /> {m.steps.length} steps</span>
-                          : <span className="text-xs text-muted">No steps yet · tap to generate</span>}
-                      </div>
-                      {m.items?.length > 0 && <div className="text-xs text-muted">{m.items.slice(0, 3).map(it => it.n).join(', ')}</div>}
-                    </div>
-                    <div className="flex items-center gap-8">
-                      <button onClick={() => toggleFavorite(m.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>
-                        <Icon name={m.favorite ? 'star-filled' : 'star'} size={18} style={{ color: m.favorite ? '#C9A84C' : 'var(--text-muted)' }} />
-                      </button>
-                      <button onClick={() => removeMeal(m.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
-                        <Icon name="trash" size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <EmptyState icon="book" title="No meals found" body="Try a different search or add a new meal." />}
+        {/* Filter tabs */}
+        <div role="tablist" aria-label="Filter meals" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 8 }}>
+          {['All', 'Breakfast', 'Lunch', 'Dinner', 'Snack', 'Favorites'].map(f => {
+            const on = filter === f;
+            return (
+              <button key={f} role="tab" aria-selected={on} onClick={() => setFilter(f)} style={{
+                flexShrink: 0, minHeight: 38, padding: '0 14px', borderRadius: 19, fontFamily: 'inherit', fontSize: 13,
+                fontWeight: on ? 700 : 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                border: on ? '1.5px solid var(--teal)' : '1px solid var(--border)',
+                background: on ? 'var(--teal)' : 'var(--bg-white)', color: on ? '#fff' : 'var(--text)',
+              }}>
+                {f === 'Favorites' && <Icon name="star-filled" size={13} style={{ color: on ? 'var(--gold)' : 'var(--gold-dark)' }} />}
+                {f}
+                <span style={{ fontSize: 11, fontWeight: 700, opacity: on ? 0.85 : 0.6 }}>{countFor(f)}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {filter === 'All' || filter === 'Favorites' ? (
+          <>
+            {SECTIONS.map(sec => {
+              const items = sortMeals(filtered.filter(m => m.slot === sec.slot));
+              if (!items.length) return null;
+              return (
+                <LibrarySection key={sec.slot} title={sec.slot} icon={sec.icon} count={items.length}>
+                  {items.map(m => <MealRow key={m.id} meal={m} onOpen={openRecipe} onFavorite={toggleFavorite} onRemove={confirmRemove} />)}
+                </LibrarySection>
+              );
+            })}
+            {otherMeals.length > 0 && (
+              <LibrarySection title="Other" icon="bowl" count={otherMeals.length}>
+                {sortMeals(otherMeals).map(m => <MealRow key={m.id} meal={m} onOpen={openRecipe} onFavorite={toggleFavorite} onRemove={confirmRemove} />)}
+              </LibrarySection>
+            )}
+          </>
+        ) : (
+          <div className="meal-card-grid">
+            {sortMeals(filtered).map(m => <MealRow key={m.id} meal={m} onOpen={openRecipe} onFavorite={toggleFavorite} onRemove={confirmRemove} />)}
+          </div>
+        )}
+
+        {filtered.length === 0 && <EmptyState icon="book" title={filter === 'Favorites' ? 'No favorites yet' : 'No meals found'} body={filter === 'Favorites' ? 'Tap the star on any meal to save it here.' : 'Try a different search or add a new meal.'} />}
       </div>
 
       {/* Pantry cross-check result */}
@@ -375,6 +389,58 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+function LibrarySection({ title, icon, count, children }) {
+  return (
+    <section style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0 10px', borderBottom: '2px solid var(--teal)', marginBottom: 10 }}>
+        <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--teal)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name={icon} size={16} />
+        </div>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>{title}</h2>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{count} meal{count !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="meal-card-grid">{children}</div>
+    </section>
+  );
+}
+
+// Compact meal row: small photo, name, quick facts, favorite star
+function MealRow({ meal, onOpen, onFavorite, onRemove }) {
+  const m = meal;
+  return (
+    <div className="card mb-8" style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <button type="button" onClick={() => onOpen(m.id)} aria-label={`Open ${m.name}`} style={{
+        flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 'none',
+        padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'inherit',
+      }}>
+        <div style={{ width: 60, height: 60, borderRadius: 10, overflow: 'hidden', flexShrink: 0, background: 'var(--teal-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {m.image
+            ? <img src={m.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+            : <Icon name="tools-kitchen-2" size={22} style={{ color: 'var(--teal)' }} />}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{m.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {m.cost > 0 && <span style={{ fontWeight: 700, color: 'var(--teal)' }}>${Number(m.cost).toFixed(2)}</span>}
+            {m.prepTime > 0 && <span>{m.prepTime} min</span>}
+            {m.steps?.length > 0
+              ? <span>{m.steps.length} steps</span>
+              : <span style={{ color: 'var(--gold-dark)' }}>No steps yet</span>}
+          </div>
+        </div>
+      </button>
+      <button type="button" onClick={() => onFavorite(m.id)} aria-label={m.favorite ? `Remove ${m.name} from favorites` : `Add ${m.name} to favorites`} aria-pressed={!!m.favorite}
+        style={{ width: 40, height: 40, flexShrink: 0, background: 'none', border: 'none', borderRadius: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={m.favorite ? 'star-filled' : 'star'} size={19} style={{ color: m.favorite ? '#C9A84C' : 'var(--text-muted)' }} />
+      </button>
+      <button type="button" onClick={() => onRemove(m)} aria-label={`Remove ${m.name}`}
+        style={{ width: 36, height: 40, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="trash" size={15} />
+      </button>
     </div>
   );
 }
