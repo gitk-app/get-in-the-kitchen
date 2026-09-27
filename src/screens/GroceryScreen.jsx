@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icon, Button, SectionLabel } from '../components/UI';
+import { Host, HostAction, HostToast, useHostToast } from '../components/Host';
 import { PLAN_SLOTS, DAYS, PANTRY_CATEGORIES } from '../data/meals';
 
 const STORE_COLORS = {
@@ -260,7 +261,7 @@ function getMonthKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-export default function GroceryScreen({ store }) {
+export default function GroceryScreen({ store, onNavigate }) {
   const { meals, plans, activeWeek, pantry, budget, prefs, setPrefs, hasAI, callClaude, addPantryItem } = store;
 
   // Receipt scanning
@@ -268,6 +269,15 @@ export default function GroceryScreen({ store }) {
   const [receipt, setReceipt] = useState(null); // { store, date, total, items: [{ name, receiptText, price, category, type, isFood, add }] }
   const [receiptBusy, setReceiptBusy] = useState(false);
   const [receiptError, setReceiptError] = useState('');
+  const [toast, showToast, hideToast] = useHostToast(9000);
+  const firstName = String(prefs?.userName || '').trim().split(/\s+/)[0] || '';
+  // A friendly word about how a trip went against the trip budget
+  const tripVerdict = (total) => {
+    const diff = perTripBudget - total;
+    if (diff >= 1) return `That trip came in $${diff.toFixed(0)} under budget${firstName ? ', ' + firstName : ''}. Love to see it!`;
+    if (diff > -1) return 'Right on budget. That is some fine shopping!';
+    return `That one ran $${Math.abs(diff).toFixed(0)} over. No stress, we'll lean on pantry meals this week to balance it out.`;
+  };
 
   const monthlyBudget = prefs?.monthlyBudget || budget * 4;
   const annualBudget = monthlyBudget * 12;
@@ -407,7 +417,7 @@ export default function GroceryScreen({ store }) {
     setRemoved(prev => new Set([...prev, ...checkedNames]));
     setExtras(prev => prev.filter(e => !checkedNames.has(e.name + '|' + e.source)));
     setCheckedNames(new Set());
-    alert('Trip saved! $' + tripTotal.toFixed(2) + ' logged.');
+    showToast(`Trip saved: $${tripTotal.toFixed(2)}. ` + tripVerdict(tripTotal));
   };
 
   // Reads a receipt photo and opens the review screen
@@ -536,9 +546,10 @@ Respond ONLY with JSON, no other text:
 
     setReceipt(null);
     setReceiptError('');
-    alert(`Trip saved: $${total.toFixed(2)} at ${storeName} on ${dateLabel}.`
-      + (toPantry.length ? ` ${toPantry.length} item${toPantry.length !== 1 ? 's' : ''} added to your pantry.` : '')
-      + (bought.length ? ` ${bought.length} checked off your list.` : ''));
+    showToast(`Saved $${total.toFixed(2)} at ${storeName}.`
+      + (toPantry.length ? ` ${toPantry.length} item${toPantry.length !== 1 ? 's' : ''} in your pantry.` : '')
+      + (bought.length ? ` ${bought.length} checked off your list.` : '')
+      + ' ' + tripVerdict(total));
   };
 
   const planItems = useMemo(() => {
@@ -737,6 +748,9 @@ Respond ONLY with JSON, no other text:
             <Icon name={receiptBusy ? 'loader-2' : 'camera'} size={16} />{receiptBusy ? 'Reading...' : 'Scan receipt'}
           </button>
         </div>
+        {receiptBusy && !receipt && (
+          <div className="mb-12"><Host quick text="Reading your receipt now. Give me a few seconds..." /></div>
+        )}
         {receiptError && !receipt && (
           <div className="banner banner-warning" role="alert">{receiptError}</div>
         )}
@@ -807,10 +821,11 @@ Respond ONLY with JSON, no other text:
               )}
             </div>
             {allItems.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No items yet</div>
-                <div style={{ fontSize: 13 }}>Add meals to your weekly plan and they'll appear here.</div>
+              <div style={{ padding: '20px 0' }}>
+                <Host text={`Your list is empty${firstName ? ', ' + firstName : ''}. Plan your week and I'll fill it in with everything you need, sorted by aisle.`}>
+                  {typeof onNavigate === 'function' && <HostAction onClick={() => onNavigate('plan')}>Plan my week</HostAction>}
+                  <HostAction secondary onClick={() => setAddingExtra(true)}>Add an item</HostAction>
+                </Host>
               </div>
             )}
             {checkedCount > 0 && (
@@ -855,6 +870,8 @@ Respond ONLY with JSON, no other text:
       </div>
 
       {/* Settings sheet */}
+      {toast && <HostToast text={toast} onClose={hideToast} />}
+
       {receipt && (
         <>
           <div onClick={() => setReceipt(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200 }} />

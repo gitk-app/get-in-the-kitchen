@@ -1,8 +1,9 @@
 // GET IN THE KITCHEN - PantryScreen v2.2 - Snap My Fridge - build:20260913
 import React, { useState, lazy, Suspense, useRef } from 'react';
-import { Icon, Button, Banner, EmptyState } from '../components/UI';
+import { Icon, Button, Banner } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
 import { pantryNeedsCheck } from '../hooks/useStore';
+import { Host, HostAction } from '../components/Host';
 
 const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'));
 
@@ -178,6 +179,7 @@ function EditSheet({ item, onSave, onClose }) {
 
 export default function PantryScreen({ store }) {
   const { pantry, addPantryItem, removePantryItem, restockPantryItem, confirmPantryItem, markPantryUsedUp, tossPantryItem, meals, setPantry, hasAI, callClaude } = store;
+  const firstName = String(store.prefs?.userName || '').trim().split(/\s+/)[0] || '';
 
   // After "Used it up", offer to put it on the grocery list
   const [usedUpPrompt, setUsedUpPrompt] = useState(null);
@@ -624,11 +626,9 @@ export default function PantryScreen({ store }) {
         )}
         {needsCheck.length > 0 && (
           <div className="card mb-12" style={{ border: '1px solid var(--gold)', background: 'var(--gold-light)' }}>
-            <div className="flex items-center gap-8" style={{ marginBottom: 4 }}>
-              <Icon name="leaf" size={16} style={{ color: 'var(--gold-dark)' }} />
-              <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>Still have these?</span>
+            <div style={{ marginBottom: 12 }}>
+              <Host quick text={`Quick check${firstName ? ', ' + firstName : ''}: still have these? It keeps your meal ideas and grocery list accurate.`} />
             </div>
-            <p className="text-sm" style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>A quick check keeps your pantry and your meal ideas accurate.</p>
             {needsCheck.map(item => (
               <div key={item.id} style={{ padding: '10px 0', borderTop: '0.5px solid var(--border)' }}>
                 <div className="flex items-center gap-8" style={{ flexWrap: 'wrap', marginBottom: 8 }}>
@@ -650,7 +650,11 @@ export default function PantryScreen({ store }) {
         )}
 
         {pantry.length === 0 && (
-          <EmptyState icon="fridge" title="Your pantry is empty" body="Scan a barcode or type an item above to get started." />
+          <div style={{ padding: '12px 0 20px' }}>
+            <Host text={`Your pantry's empty${firstName ? ', ' + firstName : ''}. Snap a photo of your fridge or pantry shelf and I'll fill it in for you. You can also scan a barcode or type items above.`}>
+              <HostAction onClick={() => fridgeInputRef.current?.click()}>Snap my fridge</HostAction>
+            </Host>
+          </div>
         )}
 
         {Object.entries(grouped).map(([cat, items]) => {

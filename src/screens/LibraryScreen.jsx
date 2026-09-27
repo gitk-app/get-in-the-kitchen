@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { PLAN_SLOTS } from '../data/meals';
+import { Host } from '../components/Host';
 
 // Food rules for recipe prompts, so recipes respect allergies and house rules
 function recipeGuard(prefs) {
@@ -300,7 +301,9 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
           </div>
         )}
 
-        {filtered.length === 0 && <EmptyState icon="book" title={filter === 'Favorites' ? 'No favorites yet' : 'No meals found'} body={filter === 'Favorites' ? 'Tap the star on any meal to save it here.' : 'Try a different search or add a new meal.'} />}
+        {filtered.length === 0 && (filter === 'Favorites' && !search
+          ? <div style={{ padding: '16px 0' }}><Host text={`No favorites yet${store.prefs?.userName ? ', ' + String(store.prefs.userName).trim().split(/\s+/)[0] : ''}. Tap the star on any meal your crew loves and I'll keep it right here, and use it more when I plan your week.`} /></div>
+          : <EmptyState icon="book" title="No meals found" body="Try a different search or add a new meal." />)}
       </div>
 
       {/* Pantry cross-check result */}

@@ -33,11 +33,11 @@ export default function App() {
 
   const screens = {
     home: <HomeScreen store={store} onNavigate={setTab} />,
-    plan: <PlanScreen store={store} />,
-    grocery: <GroceryScreen store={store} />,
-    pantry: <PantryScreen store={store} />,
-    library: <LibraryScreen store={store} />,
-    settings: <SettingsScreen store={store} />,
+    plan: <PlanScreen store={store} onNavigate={setTab} />,
+    grocery: <GroceryScreen store={store} onNavigate={setTab} />,
+    pantry: <PantryScreen store={store} onNavigate={setTab} />,
+    library: <LibraryScreen store={store} onNavigate={setTab} />,
+    settings: <SettingsScreen store={store} onNavigate={setTab} />,
   };
 
   return (

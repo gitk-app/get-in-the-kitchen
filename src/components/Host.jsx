@@ -113,3 +113,40 @@ export function HostAction({ children, onClick, secondary = false }) {
     }}>{children}</button>
   );
 }
+
+// A short message from the host that pops up at the bottom after something
+// happens, like saving a trip. The screen decides when to close it.
+export function HostToast({ text, onClose, children }) {
+  return (
+    <div role="status" style={{
+      position: 'fixed', left: '50%', transform: 'translateX(-50%)',
+      bottom: 'calc(var(--nav-height, 64px) + 16px)', width: 'calc(100% - 32px)', maxWidth: 520,
+      background: TEAL, borderRadius: 16, padding: '12px 12px 12px 14px', zIndex: 180,
+      display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+    }}>
+      <HostAvatar size={44} bg="#0F5040" talk quick />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="gitk-text-quick" style={{ fontSize: 14, lineHeight: 1.45, color: '#fff' }}>{text}</div>
+        {children && <div style={{ marginTop: 8 }}>{children}</div>}
+      </div>
+      <button type="button" onClick={onClose} aria-label="Close message" style={{
+        background: 'none', border: 'none', color: 'rgba(255,255,255,0.75)', cursor: 'pointer',
+        width: 32, height: 32, flexShrink: 0, fontSize: 18, lineHeight: 1,
+      }}>&times;</button>
+    </div>
+  );
+}
+
+// Keeps a toast on screen for a few seconds, then hides it
+export function useHostToast(ms = 8000) {
+  const [toast, setToast] = React.useState(null);
+  const timer = React.useRef(null);
+  const show = React.useCallback((text) => {
+    setToast(text);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setToast(null), ms);
+  }, [ms]);
+  const hide = React.useCallback(() => { clearTimeout(timer.current); setToast(null); }, []);
+  React.useEffect(() => () => clearTimeout(timer.current), []);
+  return [toast, show, hide];
+}

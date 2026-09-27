@@ -1,6 +1,7 @@
 // GET IN THE KITCHEN - PlanScreen v2.2 (food safety rules)
 import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
+import { Host, HostAction, HostAvatar, HostToast, useHostToast } from '../components/Host';
 import { DAYS, PLAN_SLOTS, PROTEIN_OPTIONS } from '../data/meals';
 
 // ---------------------------------------------------------------------------
@@ -147,6 +148,8 @@ export default function PlanScreen({ store }) {
   const [wizardBusyNights, setWizardBusyNights] = useState('Tuesday, Wednesday, Thursday, Friday');
   const [wizardLocked, setWizardLocked] = useState('');
   const [building, setBuilding] = useState(false);
+  const [toast, showToast, hideToast] = useHostToast(9000);
+  const firstName = String(prefs?.userName || '').trim().split(/\s+/)[0] || '';
   const [aiPicks, setAiPicks] = useState({});
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -351,6 +354,11 @@ Respond ONLY with this exact JSON structure, no other text:
 
       setWizard(false);
       setBuilding(false);
+      {
+        const planned = Object.values(newPlan).reduce((n, d) => n + Object.values(d || {}).filter(Boolean).length, 0);
+        showToast(`Your week is ready${firstName ? ', ' + firstName : ''}! ${planned} meals planned`
+          + (newMealRecords.length ? `, including ${newMealRecords.length} new ones. I'm writing their recipes and grocery items now.` : ' from meals you already know.'));
+      }
 
       // Generate steps in background for new meals
       // Spaced out so the AI is not flooded with requests all at once
@@ -377,7 +385,7 @@ Respond ONLY with this exact JSON structure, no other text:
       }
     } catch (e) {
       setBuilding(false);
-      alert('Could not build the week. Check your API key and try again.');
+      showToast("I couldn't build the week that time. Give it another try, or check your tester code in Settings.");
     }
   };
 
@@ -444,23 +452,13 @@ Respond ONLY with this exact JSON structure, no other text:
           )}
         </div>
 
-        {/* Welcome banner - shown when week is empty */}
+        {/* Host invite - shown when week is empty */}
         {Object.keys(currentPlan).length === 0 && (
-          <div style={{
-            background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
-            border: '1px solid #86efac', borderRadius: 16,
-            padding: '24px 20px', marginBottom: 20, textAlign: 'center'
-          }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>👋</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#166534', marginBottom: 6 }}>
-              Welcome to GET IN THE KITCHEN
-            </div>
-            <div style={{ fontSize: 13, color: '#166534', opacity: 0.85, lineHeight: 1.6, marginBottom: 16 }}>
-              Your week is empty and ready to plan. Tap <strong>Build my week</strong> above and Claude will fill it in based on your budget and preferences - takes about 30 seconds.
-            </div>
-            <div style={{ fontSize: 12, color: '#166534', opacity: 0.7 }}>
-              Or tap any <strong>+</strong> cell below to add meals one at a time.
-            </div>
+          <div style={{ background: 'var(--teal-light)', border: '1px solid #9ED0BC', borderRadius: 16, padding: 16, marginBottom: 20 }}>
+            <Host text={`This week's a blank page${firstName ? ', ' + firstName : ''}. Want me to fill it in around your budget? Takes about 30 seconds.`}>
+              <HostAction onClick={() => setWizard(true)}>Build my week</HostAction>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>Or tap any + below to add meals yourself.</div>
+            </Host>
           </div>
         )}
 
@@ -696,15 +694,19 @@ Respond ONLY with this exact JSON structure, no other text:
         </Sheet>
       )}
 
+      {toast && <HostToast text={toast} onClose={hideToast} />}
+
       {/* Build My Week wizard */}
       {wizard && (
         <Sheet onClose={() => setWizard(false)} title="Build my week" subtitle="Answer 3 questions and Claude fills your whole week">
           <div style={{ padding: '12px 16px' }}>
             {building ? (
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>🍳</div>
-                <h3 style={{ marginBottom: 8 }}>Building your week…</h3>
-                <p>Checking your pantry, rotating proteins, staying in budget.</p>
+              <div style={{ textAlign: 'center', padding: '32px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                <HostAvatar size={96} ring={4} talk />
+                <h3 style={{ margin: 0 }}>Building your week...</h3>
+                <p style={{ margin: 0, maxWidth: 340 }}>
+                  I'm planning 7 days around your ${prefs?.monthlyBudget || ''} budget, checking your pantry first, and rotating proteins so nobody gets bored. About 30 seconds.
+                </p>
               </div>
             ) : (
               <>

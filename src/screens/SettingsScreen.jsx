@@ -163,7 +163,8 @@ export default function SettingsScreen({ store }) {
   const [codeInput, setCodeInput] = useState('');
   const [codeStatus, setCodeStatus] = useState(''); // '' | checking | saved | error | offline
   const [newStore, setNewStore] = useState('');
-  const [editSheet, setEditSheet] = useState(null); // household | foodrules | stores | budget | proteins | mealtypes
+  const [editSheet, setEditSheet] = useState(null);
+  const [nameDraft, setNameDraft] = useState(''); // household | foodrules | stores | budget | proteins | mealtypes
 
   // Bring older saved settings into the new format, once
   useEffect(() => {
@@ -256,6 +257,7 @@ export default function SettingsScreen({ store }) {
   })();
 
   const prefRows = [
+    { key: 'name', label: 'Your name', value: prefs?.userName || 'Not set yet', accent: '#0A3D35' },
     { key: 'household', label: 'Household size', value: HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.label || 'Two of us', accent: '#0A7A65' },
     { key: 'foodrules', label: 'Food rules', value: foodRulesSummary, accent: allergies.length ? '#9B1C1C' : '#C9A84C' },
     { key: 'stores', label: 'Your stores', value: prefs?.stores?.length ? prefs.stores.join(', ') : 'None selected', accent: '#0A7A65' },
@@ -306,7 +308,7 @@ export default function SettingsScreen({ store }) {
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, marginTop: 4 }}>My preferences</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
           {prefRows.map(row => (
-            <button key={row.key} type="button" onClick={() => setEditSheet(row.key)}
+            <button key={row.key} type="button" onClick={() => { if (row.key === 'name') setNameDraft(prefs?.userName || ''); setEditSheet(row.key); }}
               style={{ textAlign: 'left', fontFamily: 'inherit', background: '#fff', border: '0.5px solid var(--border)', borderRadius: 12, padding: '14px 14px 12px', cursor: 'pointer', borderTop: `3px solid ${row.accent}` }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: row.accent, marginBottom: 6 }}>{row.label}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, marginBottom: 4 }}>{row.value}</div>
@@ -357,6 +359,17 @@ export default function SettingsScreen({ store }) {
       </div>
 
       {/* ---------------- Edit sheets ---------------- */}
+
+      {editSheet === 'name' && (
+        <EditSheet title="What should I call you?" onClose={() => setEditSheet(null)}>
+          <label htmlFor="settings-name">Your first name</label>
+          <input id="settings-name" value={nameDraft} maxLength={40} autoComplete="given-name"
+            onChange={e => setNameDraft(e.target.value)} placeholder={prefs?.userName || 'Your first name'}
+            onKeyDown={e => { if (e.key === 'Enter' && nameDraft.trim()) { setPrefs(p => ({ ...p, userName: nameDraft.trim() })); setEditSheet(null); } }}
+            style={{ marginBottom: 16, fontSize: 16 }} />
+          <Button variant="primary" onClick={() => { if (nameDraft.trim()) setPrefs(p => ({ ...p, userName: nameDraft.trim() })); setEditSheet(null); }}>Save</Button>
+        </EditSheet>
+      )}
 
       {editSheet === 'household' && (
         <EditSheet title="Who are we feeding?" onClose={() => setEditSheet(null)}>
