@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icon, Button, SectionLabel } from '../components/UI';
-import { PLAN_SLOTS, DAYS } from '../data/meals';
+import { PLAN_SLOTS, DAYS, PANTRY_CATEGORIES } from '../data/meals';
 
 const STORE_COLORS = {
   'Aldi': { bg: '#f0fdf4', border: '#86efac', label: '#166534', bar: '#16a34a' },
@@ -190,6 +190,53 @@ const normalizeFreq = (f) => (f === 'twicemonth' ? 'biweekly' : f);
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+// ---------------------------------------------------------------------------
+// Receipt scanning helpers
+// ---------------------------------------------------------------------------
+// Shrinks a photo so it sends fast. Receipts keep more detail than fridge photos.
+function resizeReceipt(file, maxSide = 2000) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+    img.src = url;
+  });
+}
+
+function parseReceiptJson(text) {
+  const clean = String(text || '').replace(/```json|```/g, '').trim();
+  const start = clean.indexOf('{'), end = clean.lastIndexOf('}');
+  return JSON.parse(start !== -1 && end !== -1 ? clean.slice(start, end + 1) : '{}');
+}
+
+// "2026-09-26" becomes a local date (not shifted by time zone)
+function dateFromKey(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date();
+}
+function todayKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Simple word matching so "Chicken thighs" on the list matches "Boneless chicken thighs" on the receipt
+const wordsOf = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+  .filter(w => w.length > 2).map(w => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w));
+const listItemMatches = (listName, receiptName) => {
+  const need = wordsOf(listName);
+  const have = new Set(wordsOf(receiptName));
+  return need.length > 0 && need.every(w => have.has(w));
+};
+
 // Saved grocery progress: what she checked off and removed each week, plus
 // which store she moved items to. Lives in one localStorage key.
 const PROGRESS_KEY = 'gitk_grocery_progress';
@@ -214,7 +261,13 @@ function getMonthKey(d) {
 }
 
 export default function GroceryScreen({ store }) {
-  const { meals, plans, activeWeek, pantry, budget, prefs, setPrefs } = store;
+  const { meals, plans, activeWeek, pantry, budget, prefs, setPrefs, hasAI, callClaude, addPantryItem } = store;
+
+  // Receipt scanning
+  const receiptInput = useRef(null);
+  const [receipt, setReceipt] = useState(null); // { store, date, total, items: [{ name, receiptText, price, category, type, isFood, add }] }
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
 
   const monthlyBudget = prefs?.monthlyBudget || budget * 4;
   const annualBudget = monthlyBudget * 12;
@@ -355,6 +408,137 @@ export default function GroceryScreen({ store }) {
     setExtras(prev => prev.filter(e => !checkedNames.has(e.name + '|' + e.source)));
     setCheckedNames(new Set());
     alert('Trip saved! $' + tripTotal.toFixed(2) + ' logged.');
+  };
+
+  // Reads a receipt photo and opens the review screen
+  const handleReceiptPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!hasAI) {
+      setReceiptError('Add your tester code in Settings to scan receipts.');
+      return;
+    }
+    setReceiptBusy(true);
+    setReceiptError('');
+    try {
+      const base64 = await resizeReceipt(file);
+      const storeHint = userStores.length ? userStores.join(', ') : 'none';
+      const text = await callClaude([{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+          { type: 'text', text: `This is a photo of a grocery store receipt (it may be only part of a long receipt). Read it carefully.
+
+Return:
+- store: the store name. If it matches one of these, use that exact spelling: ${storeHint}. Empty string if not visible.
+- date: purchase date as YYYY-MM-DD, or empty string if not visible.
+- total: the final total paid (after tax and discounts) as a number, or null if not visible on this photo.
+- items: every purchased line item. For each:
+  - receiptText: the text exactly as printed
+  - name: a plain, simple name a home cook would use (for example "GV WHL MLK 1GAL" becomes "Whole milk")
+  - qty: size or count if shown (like "1 gallon" or "2 lb"), otherwise empty string
+  - price: the line price as a number
+  - isFood: true for food and drinks, false for things like paper towels, soap, or bags
+  - category: one of ${PANTRY_CATEGORIES.join(', ')}
+  - type: "fresh" for perishables, "frozen" for frozen items, "shelf" for shelf-stable
+
+Skip tax lines, subtotals, coupons, discounts, payment lines, and change due. Only include what you can actually read. Do not guess.
+Respond ONLY with JSON, no other text:
+{"store":"","date":"","total":0,"items":[{"receiptText":"","name":"","qty":"","price":0,"isFood":true,"category":"Pantry Staples","type":"shelf"}]}` },
+        ],
+      }], 3000);
+      const r = parseReceiptJson(text);
+      const newItems = (Array.isArray(r.items) ? r.items : [])
+        .filter(it => it && (it.name || it.receiptText))
+        .map((it, i) => ({
+          key: Date.now() + '-' + i,
+          name: String(it.name || it.receiptText).trim(),
+          receiptText: String(it.receiptText || ''),
+          qty: String(it.qty || ''),
+          price: Number(it.price) || 0,
+          isFood: it.isFood !== false,
+          category: PANTRY_CATEGORIES.includes(it.category) ? it.category : 'Pantry Staples',
+          type: ['fresh', 'frozen', 'shelf'].includes(it.type) ? it.type : 'shelf',
+          add: it.isFood !== false,
+        }));
+      if (!newItems.length && !(Number(r.total) > 0)) {
+        setReceiptError("I couldn't read that one. Try again with the receipt flat, in good light, and filling the photo.");
+        setReceiptBusy(false);
+        return;
+      }
+      setReceipt(prev => {
+        // A second photo of the same receipt adds its items and fills in anything missing
+        if (prev) {
+          return {
+            ...prev,
+            store: prev.store || r.store || '',
+            date: prev.date || r.date || todayKey(),
+            total: Number(r.total) > 0 ? String(r.total) : prev.total,
+            items: [...prev.items, ...newItems],
+          };
+        }
+        return {
+          store: r.store || userStores[0] || '',
+          date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? r.date : todayKey(),
+          total: Number(r.total) > 0 ? String(r.total) : '',
+          items: newItems,
+        };
+      });
+    } catch (err) {
+      setReceiptError("Couldn't read that receipt. Check your connection and try again.");
+    }
+    setReceiptBusy(false);
+  };
+
+  const updateReceiptItem = (key, changes) =>
+    setReceipt(prev => ({ ...prev, items: prev.items.map(it => it.key === key ? { ...it, ...changes } : it) }));
+
+  // Logs the trip, stocks the pantry, and checks off matching grocery list items
+  const saveReceipt = () => {
+    if (!receipt) return;
+    const total = parseFloat(receipt.total);
+    if (!(total > 0)) { setReceiptError('Add the receipt total before saving.'); return; }
+    const storeName = receipt.store || 'Other';
+    const when = dateFromKey(receipt.date);
+    const dateLabel = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const already = tripHistory.some(t => t.date === dateLabel && Math.abs((t.total || 0) - total) < 0.01);
+    if (already && !window.confirm('A trip with this date and total is already saved. Save it again?')) return;
+
+    const t = {
+      date: dateLabel,
+      monthKey: getMonthKey(when),
+      yearKey: String(when.getFullYear()),
+      stores: { [storeName]: total },
+      total,
+      budget: perTripBudget,
+      monthlyBudget,
+      source: 'receipt',
+      // Real prices from her stores, saved for better cost estimates later
+      items: receipt.items.map(it => ({ name: it.name, price: it.price, qty: it.qty, store: storeName })),
+    };
+    const updated = [t, ...tripHistory];
+    setTripHistory(updated);
+    localStorage.setItem('gitk_trip_history', JSON.stringify(updated));
+
+    const toPantry = receipt.items.filter(it => it.add && it.isFood);
+    toPantry.forEach(it => addPantryItem({ name: it.name, qty: it.qty, category: it.category, type: it.type, fresh: it.type === 'fresh' }));
+
+    // Anything on the list that shows up on the receipt counts as bought
+    const bought = allItems.filter(li => receipt.items.some(it => listItemMatches(li.name, it.name)));
+    if (bought.length) {
+      const keys = bought.map(li => li.name + '|' + li.source);
+      setRemoved(prev => new Set([...prev, ...keys]));
+      setCheckedNames(prev => { const n = new Set(prev); keys.forEach(k => n.delete(k)); return n; });
+      setExtras(prev => prev.filter(e => !keys.includes(e.name + '|' + e.source)));
+    }
+
+    setReceipt(null);
+    setReceiptError('');
+    alert(`Trip saved: $${total.toFixed(2)} at ${storeName} on ${dateLabel}.`
+      + (toPantry.length ? ` ${toPantry.length} item${toPantry.length !== 1 ? 's' : ''} added to your pantry.` : '')
+      + (bought.length ? ` ${bought.length} checked off your list.` : ''));
   };
 
   const planItems = useMemo(() => {
@@ -535,9 +719,31 @@ export default function GroceryScreen({ store }) {
       </div>
 
       <div className="screen-padded">
+        {/* Receipt scan */}
+        <input ref={receiptInput} type="file" accept="image/*" capture="environment" onChange={handleReceiptPhoto} style={{ display: 'none' }} />
+        <div className="mb-12" style={{ background: 'var(--teal)', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(201,168,76,0.18)', color: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="receipt" size={22} />
+          </div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Scan your receipt</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>Snap it and I'll log your trip and stock your pantry.</div>
+          </div>
+          <button type="button" onClick={() => receiptInput.current?.click()} disabled={receiptBusy} style={{
+            background: 'var(--gold)', color: 'var(--teal)', border: 'none', borderRadius: 10, padding: '10px 16px',
+            fontSize: 14, fontWeight: 800, fontFamily: 'inherit', cursor: receiptBusy ? 'default' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 6, opacity: receiptBusy ? 0.7 : 1,
+          }}>
+            <Icon name={receiptBusy ? 'loader-2' : 'camera'} size={16} />{receiptBusy ? 'Reading...' : 'Scan receipt'}
+          </button>
+        </div>
+        {receiptError && !receipt && (
+          <div className="banner banner-warning" role="alert">{receiptError}</div>
+        )}
+
         {/* Store totals */}
         <div className="card mb-12">
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Enter totals by store</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Or enter totals by store</div>
           {userStores.map(s => (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <StoreLogo name={s} size={16} />
@@ -649,6 +855,96 @@ export default function GroceryScreen({ store }) {
       </div>
 
       {/* Settings sheet */}
+      {receipt && (
+        <>
+          <div onClick={() => setReceipt(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200 }} />
+          <div role="dialog" aria-label="Check your receipt" style={{
+            position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 640,
+            background: 'var(--bg-white)', borderRadius: '20px 20px 0 0', zIndex: 201, maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ width: 40, height: 4, background: 'var(--border-strong)', borderRadius: 2, margin: '12px auto 0', flexShrink: 0 }} />
+            <div style={{ padding: '12px 16px 10px', borderBottom: '0.5px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800 }}>Check your receipt</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Fix anything that looks off. The photo is not saved.</div>
+              </div>
+              <button onClick={() => setReceipt(null)} aria-label="Close" style={{ background: 'var(--surface)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="x" size={16} />
+              </button>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
+                <div>
+                  <label htmlFor="rc-store">Store</label>
+                  <select id="rc-store" value={receipt.store} onChange={e => setReceipt(p => ({ ...p, store: e.target.value }))} style={{ height: 42 }}>
+                    {[...new Set([receipt.store, ...userStores, 'Other'].filter(Boolean))].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="rc-date">Date</label>
+                  <input id="rc-date" type="date" value={receipt.date} onChange={e => setReceipt(p => ({ ...p, date: e.target.value }))} style={{ height: 42 }} />
+                </div>
+                <div>
+                  <label htmlFor="rc-total">Total paid</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>$</span>
+                    <input id="rc-total" type="number" step="0.01" inputMode="decimal" value={receipt.total} placeholder="0.00"
+                      onChange={e => setReceipt(p => ({ ...p, total: e.target.value }))}
+                      style={{ height: 42, paddingLeft: 22, fontWeight: 800, fontSize: 16 }} />
+                  </div>
+                </div>
+              </div>
+
+              {!receipt.total && (
+                <div className="banner banner-warning" style={{ marginBottom: 12 }}>
+                  I couldn't find the total. Type it in, or add a photo of the bottom of the receipt.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>{receipt.items.length} item{receipt.items.length !== 1 ? 's' : ''} found</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Checked items go to your pantry</div>
+              </div>
+              {receipt.items.map(it => (
+                <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
+                  <input type="checkbox" checked={it.add} onChange={e => updateReceiptItem(it.key, { add: e.target.checked })}
+                    aria-label={`Add ${it.name} to pantry`} style={{ width: 20, height: 20, flexShrink: 0, accentColor: '#0A3D35' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input value={it.name} onChange={e => updateReceiptItem(it.key, { name: e.target.value })}
+                      aria-label="Item name" style={{ height: 34, fontSize: 14, fontWeight: 600, padding: '4px 8px' }} />
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
+                      {it.receiptText && <span>{it.receiptText}</span>}
+                      {it.isFood ? <span>{it.receiptText ? ' · ' : ''}{it.category}, {it.type}</span> : <span>{it.receiptText ? ' · ' : ''}not food</span>}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--teal)', flexShrink: 0 }}>{it.price ? '$' + it.price.toFixed(2) : ''}</div>
+                </div>
+              ))}
+
+              <button type="button" onClick={() => receiptInput.current?.click()} disabled={receiptBusy} style={{
+                marginTop: 14, width: '100%', padding: 12, borderRadius: 10, border: '1.5px dashed var(--teal)', background: 'var(--teal-light)',
+                color: 'var(--teal)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+                <Icon name={receiptBusy ? 'loader-2' : 'camera-plus'} size={16} />
+                {receiptBusy ? 'Reading...' : 'Long receipt? Add another photo'}
+              </button>
+              {receiptError && <div role="alert" style={{ color: '#9B1C1C', fontSize: 13, fontWeight: 600, marginTop: 10 }}>{receiptError}</div>}
+            </div>
+
+            <div style={{ padding: '12px 16px 20px', borderTop: '0.5px solid var(--border)', flexShrink: 0 }}>
+              <button type="button" onClick={saveReceipt} style={{
+                width: '100%', height: 50, borderRadius: 12, border: 'none', background: 'var(--teal)', color: '#fff',
+                fontSize: 15, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+              }}>
+                Save trip{receipt.items.filter(i => i.add && i.isFood).length ? ` and add ${receipt.items.filter(i => i.add && i.isFood).length} to pantry` : ''}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {showSettings && (
         <>
           <div onClick={() => setShowSettings(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200 }} />
