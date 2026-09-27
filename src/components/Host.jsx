@@ -6,7 +6,7 @@ import React from 'react';
 // the final illustration later only means changing HostFace below.
 // ---------------------------------------------------------------------------
 
-export const HOST_NAME = 'Michele';
+export const HOST_NAME = 'Nia';
 
 const TEAL = '#0A3D35';
 const GOLD = '#C9A84C';
