@@ -2,24 +2,24 @@ import React, { useState } from 'react';
 import { Icon, Button, Sheet, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { MEAL_SLOTS } from '../data/meals';
 
-// Pexels image fetcher — much better food photography than Unsplash
-async function fetchMealImage(mealName, apiKey) {
-  if (!apiKey) return null;
-  try {
-    const query = encodeURIComponent(mealName + ' food');
-    const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${query}&per_page=10&orientation=landscape`,
-      { headers: { Authorization: apiKey } }
-    );
-    const data = await res.json();
-    const photos = data.photos || [];
-    if (!photos.length) return null;
-    // Pick a random one from the top 5 so it varies
-    const top5 = photos.slice(0, 5);
-    const pick = top5[Math.floor(Math.random() * top5.length)];
-    return pick.src?.large || pick.src?.medium || null;
-  } catch { return null; }
+// Food rules for recipe prompts, so recipes respect allergies and house rules
+function recipeGuard(prefs) {
+  const allergies = prefs?.allergies || [];
+  const rules = (prefs?.houseRules || []).filter(r => r !== 'We eat everything');
+  const goals = prefs?.healthGoals || [];
+  const lines = [];
+  if (allergies.length) lines.push(`FOOD ALLERGIES (life-safety rule): never include ${allergies.join(', ')} in any form, including sauces, oils, broths, and garnishes.`);
+  if (rules.length) lines.push(`HOUSE RULES (strict): ${rules.join(', ')}.`);
+  if (goals.length) lines.push(`HEALTH GOALS (lean this way): ${goals.join(', ')}.`);
+  return lines.join('\n');
 }
+
+function parseJson(text) {
+  const clean = String(text || '').replace(/```json|```/g, '').trim();
+  try { return JSON.parse(clean); } catch (e) { /* trim extra text */ }
+  return JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}') + 1));
+}
+
 function IngredientRow({ item, index, onChange, onRemove, stores }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -48,7 +48,8 @@ function IngredientRow({ item, index, onChange, onRemove, stores }) {
 }
 
 export default function LibraryScreen({ store }) {
-  const { meals, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals, pantry, prefs, unsplashKey } = store;
+  const { meals, removeMeal, updateMeal, toggleFavorite, apiFetch, setMeals, pantry, prefs, hasPhotos, fetchPhoto } = store;
+  const fetchMealImage = (mealName) => fetchPhoto(mealName + ' food');
 
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
@@ -73,15 +74,19 @@ export default function LibraryScreen({ store }) {
   const generateSteps = async (id, mealName, mealSlot) => {
     setGeneratingFor(id);
     setGenerateError('');
-    const prompt = `Simple home-cook recipe for "${mealName}" (${mealSlot}). Practical, budget-friendly. JSON only: {"prepTime":20,"steps":["step 1","step 2","step 3","step 4"]}`;
+    const guard = recipeGuard(prefs);
+    const prompt = `Simple home-cook recipe for "${mealName}" (${mealSlot}). Practical, budget-friendly.
+Write 5 to 7 short steps, each under 25 words.${guard ? '\n' + guard : ''}
+Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
     try {
-      const text = await apiFetch(prompt, 500);
-      const r = JSON.parse(text);
-      updateMeal(id, { steps: r.steps || [], prepTime: r.prepTime || 20 });
+      const text = await apiFetch(prompt, 1200);
+      const r = parseJson(text);
+      if (!Array.isArray(r.steps) || !r.steps.length) throw new Error('No steps');
+      updateMeal(id, { steps: r.steps, prepTime: r.prepTime || 20 });
       // If viewing this recipe, trigger a re-render
       if (recipeView === id) setRecipeView(id);
     } catch (e) {
-      setGenerateError('Could not generate steps. Check your API key in Settings.');
+      setGenerateError("Couldn't write the steps that time. Try again, or check your tester code in Settings.");
     }
     setGeneratingFor(null);
   };
@@ -111,9 +116,9 @@ export default function LibraryScreen({ store }) {
     const nm = { id: newId, name: name.trim(), slot, cost: parseFloat(cost) || 0, protein: 'none', items, steps: stepList, prepTime: 0, favorite: false, image: null };
     store.setMeals(prev => [...prev, nm]);
 
-    // Fetch image from Unsplash in background
-    if (unsplashKey) {
-      fetchMealImage(name.trim(), unsplashKey).then(imageUrl => {
+    // Find a food photo in the background
+    if (hasPhotos) {
+      fetchMealImage(name.trim()).then(imageUrl => {
         if (imageUrl) store.setMeals(prev => prev.map(m => m.id === newId ? { ...m, image: imageUrl } : m));
       });
     }
@@ -214,7 +219,7 @@ export default function LibraryScreen({ store }) {
             borderRadius: '20px 20px 0 0', zIndex: 201, padding: '20px 20px 36px'
           }}>
             <div style={{ width: 40, height: 4, background: 'var(--border-strong)', borderRadius: 2, margin: '0 auto 16px' }} />
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Pantry check — {pantryCheck.mealName}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Pantry check - {pantryCheck.mealName}</div>
             {pantryCheck.inPantry.length > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>✓ You have these</div>
@@ -253,9 +258,9 @@ export default function LibraryScreen({ store }) {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={e => e.target.style.display = 'none'}
               />
-              {unsplashKey && (
+              {hasPhotos && (
                 <button onClick={async () => {
-                  const url = await fetchMealImage(recipe.name, unsplashKey);
+                  const url = await fetchMealImage(recipe.name);
                   if (url) updateMeal(recipe.id, { image: url });
                 }} style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>
                   Try another photo
@@ -263,10 +268,10 @@ export default function LibraryScreen({ store }) {
               )}
             </div>
           )}
-          {!recipe.image && unsplashKey && (
+          {!recipe.image && hasPhotos && (
             <div style={{ padding: '10px 16px 0' }}>
               <button onClick={async () => {
-                const url = await fetchMealImage(recipe.name, unsplashKey);
+                const url = await fetchMealImage(recipe.name);
                 if (url) updateMeal(recipe.id, { image: url });
               }} style={{ background: 'var(--teal-light)', color: 'var(--teal)', border: '0.5px solid var(--teal)', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 <Icon name="photo" size={13} /> Find a photo
@@ -342,7 +347,7 @@ export default function LibraryScreen({ store }) {
               </div>
             </div>
 
-            {/* Ingredients — one row per ingredient with optional store */}
+            {/* Ingredients - one row per ingredient with optional store */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label style={{ margin: 0 }}>Ingredients <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(store optional)</span></label>
@@ -359,7 +364,7 @@ export default function LibraryScreen({ store }) {
             </div>
 
             <div className="form-group">
-              <label>Recipe steps <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(one per line — or leave blank to generate with AI)</span></label>
+              <label>Recipe steps <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(one per line - or leave blank to generate with AI)</span></label>
               <textarea value={steps} onChange={e => setSteps(e.target.value)}
                 placeholder="Leave blank to auto-generate after saving…"
                 style={{ height: 80, resize: 'vertical' }} />
