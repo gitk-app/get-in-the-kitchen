@@ -1,6 +1,6 @@
 // GET IN THE KITCHEN - PantryScreen v2.2 - Snap My Fridge - build:20260913
 import React, { useState, lazy, Suspense, useRef } from 'react';
-import { Icon, Button, Banner, SectionLabel, EmptyState } from '../components/UI';
+import { Icon, Button, Banner, EmptyState } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
 import { pantryNeedsCheck } from '../hooks/useStore';
 
@@ -63,15 +63,35 @@ const TYPE_OPTIONS = [
   { value: 'shelf', label: 'Shelf-stable', desc: 'Periodic check-in reminder' },
 ];
 
+// Each pantry section gets its own color, so she can spot categories at a glance
+const CATEGORY_THEMES = {
+  'Produce': { icon: 'apple', bg: '#EEF7E6', border: '#B9DB9A', accent: '#5A9A2E', text: '#2F5716' },
+  'Vegetables': { icon: 'carrot', bg: '#E6F4EE', border: '#9ED0BC', accent: '#2E8A6B', text: '#0F5040' },
+  'Dairy': { icon: 'milk', bg: '#EAF2FB', border: '#AFCBEA', accent: '#3F7CC0', text: '#1D4677' },
+  'Meat': { icon: 'meat', bg: '#FCEBE2', border: '#E9B299', accent: '#C0623D', text: '#7A3418' },
+  'Fish/Seafood': { icon: 'fish', bg: '#E4F3F6', border: '#99CFDA', accent: '#23859A', text: '#0E4E5B' },
+  'Pantry Staples': { icon: 'box', bg: '#FFF6E0', border: '#EACB7E', accent: '#C9A84C', text: '#6B5210' },
+  'Frozen': { icon: 'snowflake', bg: '#EFEEFB', border: '#BDB8EC', accent: '#6A5FC9', text: '#352C85' },
+};
+const DEFAULT_THEME = { icon: 'basket', bg: '#F0EBE0', border: '#D8CCB8', accent: '#7A6A52', text: '#4A3F2E' };
+const categoryTheme = (cat) => CATEGORY_THEMES[cat] || DEFAULT_THEME;
+
+// Freshness badge: green when fresh, gold when it's time to use it, red when it's getting old
 function FreshnessBadge({ item }) {
+  const base = { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 12, whiteSpace: 'nowrap' };
   if (item.type === 'frozen') {
-    return <span className="freshness-badge shelf" style={{ background: '#eff6ff', color: '#1e40af' }}>❄️ frozen</span>;
+    return <span style={{ ...base, background: '#fff', color: '#352C85', border: '1px solid #BDB8EC' }}><Icon name="snowflake" size={11} />frozen</span>;
   }
   if (item.type === 'fresh' || item.fresh) {
     const age = daysOld(item.addedAt);
-    return <span className={`freshness-badge ${age >= 2 ? 'stale' : ''}`}>fresh · {age}d</span>;
+    const look = age >= 5
+      ? { background: '#FDE4E1', color: '#9B1C1C', border: '1px solid #F3B1A9', label: `${age} days, use today` }
+      : age >= 3
+        ? { background: '#FFF1CC', color: '#7A5A10', border: '1px solid #EACB7E', label: `${age} days, use soon` }
+        : { background: '#E3F5E8', color: '#1E6B3A', border: '1px solid #A8DDB7', label: age === 0 ? 'fresh today' : `fresh, ${age} day${age === 1 ? '' : 's'}` };
+    return <span style={{ ...base, background: look.background, color: look.color, border: look.border }}><Icon name="leaf" size={11} />{look.label}</span>;
   }
-  return <span className="freshness-badge shelf">shelf-stable</span>;
+  return <span style={{ ...base, background: '#fff', color: '#6B5210', border: '1px solid #EACB7E' }}><Icon name="box" size={11} />shelf-stable</span>;
 }
 
 function EditSheet({ item, onSave, onClose }) {
@@ -633,34 +653,45 @@ export default function PantryScreen({ store }) {
           <EmptyState icon="fridge" title="Your pantry is empty" body="Scan a barcode or type an item above to get started." />
         )}
 
-        {Object.entries(grouped).map(([cat, items]) => (
-          <div key={cat} className="mb-16">
-            <SectionLabel>{cat}</SectionLabel>
-            {items.map(item => (
-              <div key={item.id} className="pantry-item">
-                <div className="pantry-item-row">
-                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setEditItem(item)}>
-                    <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 14, fontWeight: 500 }}>{item.name}</span>
-                      {item.qty && <span className="text-xs text-muted">({item.qty})</span>}
-                      <FreshnessBadge item={item} />
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>Tap to edit</div>
-                  </div>
-                  <button onClick={() => removePantryItem(item.id)} aria-label={`Delete ${item.name} (added by mistake)`} title="Delete (added by mistake)"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 8 }}>
-                    <Icon name="trash" size={16} />
-                  </button>
+        {Object.entries(grouped).map(([cat, items]) => {
+          const t = categoryTheme(cat);
+          return (
+            <section key={cat} style={{ marginBottom: 22 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 8px', borderBottom: `3px solid ${t.accent}`, marginBottom: 10 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 9, background: t.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon name={t.icon} size={16} />
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 12px 10px' }}>
-                  {isFreshItem(item) && <CheckButton small label="Restocked" icon="refresh" onClick={() => restockPantryItem(item.id)} />}
-                  <CheckButton small label="Used it up" icon="tools-kitchen-2" onClick={() => handleUsedUp(item.id)} />
-                  {isFreshItem(item) && <CheckButton small label="Tossed it" icon="trash" onClick={() => handleTossed(item.id)} />}
-                </div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>{cat}</h2>
+                <span style={{ fontSize: 12, fontWeight: 700, color: t.text, background: t.bg, border: `1px solid ${t.border}`, borderRadius: 12, padding: '2px 10px' }}>
+                  {items.length} item{items.length !== 1 ? 's' : ''}
+                </span>
               </div>
-            ))}
-          </div>
-        ))}
+              {items.map(item => (
+                <div key={item.id} style={{ background: t.bg, border: `1px solid ${t.border}`, borderLeft: `5px solid ${t.accent}`, borderRadius: 14, marginBottom: 8, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 6px' }}>
+                    <div style={{ flex: 1, cursor: 'pointer', minWidth: 0 }} onClick={() => setEditItem(item)}>
+                      <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{item.name}</span>
+                        {item.qty && <span style={{ fontSize: 12, color: t.text }}>({item.qty})</span>}
+                        <FreshnessBadge item={item} />
+                      </div>
+                      <div style={{ fontSize: 11, color: t.text, opacity: 0.75, marginTop: 3 }}>Tap to edit</div>
+                    </div>
+                    <button onClick={() => removePantryItem(item.id)} aria-label={`Delete ${item.name} (added by mistake)`} title="Delete (added by mistake)"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.text, opacity: 0.5, padding: 8 }}>
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 12px 10px' }}>
+                    {isFreshItem(item) && <CheckButton small color={t.text} label="Restocked" icon="refresh" onClick={() => restockPantryItem(item.id)} />}
+                    <CheckButton small color={t.text} label="Used it up" icon="tools-kitchen-2" onClick={() => handleUsedUp(item.id)} />
+                    {isFreshItem(item) && <CheckButton small color={t.text} label="Tossed it" icon="trash" onClick={() => handleTossed(item.id)} />}
+                  </div>
+                </div>
+              ))}
+            </section>
+          );
+        })}
       </div>
 
       {usedUpPrompt && (
@@ -678,12 +709,12 @@ export default function PantryScreen({ store }) {
   );
 }
 
-function CheckButton({ label, icon, onClick, small = false }) {
+function CheckButton({ label, icon, onClick, small = false, color = 'var(--teal)' }) {
   return (
     <button type="button" onClick={onClick} style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: small ? 32 : 36,
-      padding: small ? '0 10px' : '0 12px', borderRadius: 18, border: '1px solid var(--border)',
-      background: 'var(--bg-white)', color: 'var(--teal)', fontSize: small ? 12 : 13, fontWeight: 600,
+      padding: small ? '0 10px' : '0 12px', borderRadius: 18, border: '1px solid rgba(0,0,0,0.08)',
+      background: 'var(--bg-white)', color, fontSize: small ? 12 : 13, fontWeight: 700,
       fontFamily: 'inherit', cursor: 'pointer',
     }}>
       <Icon name={icon} size={small ? 13 : 14} />{label}
