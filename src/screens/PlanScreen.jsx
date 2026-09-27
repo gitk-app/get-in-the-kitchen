@@ -3,25 +3,6 @@ import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { DAYS, PLAN_SLOTS, PROTEIN_OPTIONS } from '../data/meals';
 
-// Fetch food photo from Pexels
-async function fetchMealImage(mealName, apiKey) {
-  if (!apiKey) return null;
-  try {
-    const query = encodeURIComponent(mealName + ' food');
-    const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${query}&per_page=5&orientation=landscape`,
-      { headers: { Authorization: apiKey } }
-    );
-    const data = await res.json();
-    const photos = data.photos || [];
-    if (!photos.length) return null;
-    const top = photos.slice(0, 3);
-    const pick = top[Math.floor(Math.random() * top.length)];
-    return pick.src?.medium || null;
-  } catch { return null; }
-}
-
-
 // ---------------------------------------------------------------------------
 // Food safety rules. Reads both the new onboarding labels and older setting ids
 // so every AI prompt respects allergies, house rules, and health goals.
@@ -138,7 +119,7 @@ const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
 export default function PlanScreen({ store }) {
   const { meals, currentPlan, activeWeek, setActiveWeek, setMealInPlan, setBulkPlan, clearWeek,
-    planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal, prefs, unsplashKey } = store;
+    planTotal, monthlyTotal, budget, pantry, apiFetch, addMeal, updateMeal, prefs, hasPhotos, fetchPhoto } = store;
 
   const [picker, setPicker] = useState(null);
   const [browseAll, setBrowseAll] = useState(false);
@@ -348,7 +329,7 @@ Respond ONLY with this exact JSON structure, no other text:
       });
 
       // Fetch photos for ALL meals in the plan in the background
-      if (unsplashKey) {
+      if (hasPhotos) {
         const allPlannedMeals = Object.values(newPlan).flatMap(day => Object.values(day));
         const uniqueIds = [...new Set(allPlannedMeals)];
         const allMeals = [...store.mealsRef.current, ...newMealRecords];
@@ -358,7 +339,7 @@ Respond ONLY with this exact JSON structure, no other text:
           const meal = allMeals.find(m => m.id === id);
           if (!meal || meal.image) return;
           setTimeout(() => {
-            fetchMealImage(meal.name, unsplashKey).then(url => {
+            fetchPhoto(meal.name + ' food').then(url => {
               if (url) updateMeal(id, { image: url });
             });
           }, i * 300); // 300ms between each request
@@ -491,8 +472,8 @@ Respond ONLY with this exact JSON structure, no other text:
                             <div style={{ position: 'absolute', inset: 0, padding: '6px 6px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
                               onClick={() => {
                                 setRecipeView(meal.id);
-                                if (unsplashKey && !meal.image) {
-                                  fetchMealImage(meal.name, unsplashKey).then(url => { if (url) updateMeal(meal.id, { image: url }); });
+                                if (hasPhotos && !meal.image) {
+                                  fetchPhoto(meal.name + ' food').then(url => { if (url) updateMeal(meal.id, { image: url }); });
                                 }
                               }}>
                               <div style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.2, color: meal.image ? '#fff' : 'var(--text)', marginBottom: 2, textShadow: meal.image ? '0 1px 3px rgba(0,0,0,0.8)' : 'none' }}>{meal.name}</div>

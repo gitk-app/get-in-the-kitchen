@@ -13,7 +13,6 @@ import {
 
 const HOST_NAME = 'Michele';
 const DRAFT_KEY = 'gitk_onboarding_draft';
-const TOTAL_STEPS = 7;
 
 const C = {
   teal: '#0A3D35',
@@ -308,7 +307,10 @@ function TextButton({ children, onClick, light = false }) {
 // ---------------------------------------------------------------------------
 
 export default function OnboardingScreen({ store, onNavigate }) {
-  const { setOnboarded, setPrefs, setBudget, apiFetch, setMeals, setApiKey } = store;
+  const { setOnboarded, setPrefs, setBudget, apiFetch, setMeals, betaCode, setBetaCode, checkBetaCode } = store;
+  // Testers who opened an invite link already have a code, so they skip the code step
+  const needsCode = useRef(!betaCode && !localStorage.getItem('gitk_api_key')).current;
+  const TOTAL_STEPS = needsCode ? 7 : 6;
   const draft = useRef(loadDraft()).current;
 
   const [step, setStep] = useState(draft.step || 0);
@@ -324,7 +326,9 @@ export default function OnboardingScreen({ store, onNavigate }) {
   const [healthGoals, setHealthGoals] = useState(draft.healthGoals || []);
   const [proteins, setProteins] = useState(draft.proteins || []);
   const [mealTypes, setMealTypes] = useState(draft.mealTypes || []);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [checkingCode, setCheckingCode] = useState(false);
 
   const [phase, setPhase] = useState('questions'); // questions | building | reveal
   const [buildTick, setBuildTick] = useState(0);
@@ -397,7 +401,21 @@ export default function OnboardingScreen({ store, onNavigate }) {
   };
 
   // ----- Finish: save prefs, build starter library -----
-  const finish = async () => {
+  const finish = async (skipCode = false) => {
+    // Check the access code first, if she typed one
+    if (step === 7 && !skipCode && codeInput.trim()) {
+      setCheckingCode(true);
+      setCodeError('');
+      const result = await checkBetaCode(codeInput);
+      setCheckingCode(false);
+      if (!result.ok) {
+        setCodeError(result.offline
+          ? "Couldn't reach the app right now. Check your internet and try again."
+          : "That code didn't work. Double-check it, or tap Skip for now.");
+        return;
+      }
+      setBetaCode(codeInput);
+    }
     const budget = mb || 450;
     // dietary keeps the old shape so Build My Week still enforces everything
     const dietary = [
@@ -423,14 +441,13 @@ export default function OnboardingScreen({ store, onNavigate }) {
 
     setBudget(budget / 4);
     setPrefs(prefs);
-    if (apiKeyInput.trim()) setApiKey(apiKeyInput.trim());
 
     setPhase('building');
     const started = Date.now();
     let meals = [];
     let ai = false;
 
-    const hasKey = apiKeyInput.trim() || localStorage.getItem('gitk_api_key');
+    const hasKey = localStorage.getItem('gitk_beta_code') || localStorage.getItem('gitk_api_key');
     if (hasKey) {
       try {
         const proteinStr = allowedProteins.length ? allowedProteins.join(', ') : 'a healthy mix of everyday proteins';
@@ -571,7 +588,7 @@ Return ONLY a JSON array, no other text:
         <div style={{ width: '100%', maxWidth: 480, padding: '32px 24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           <Host text={usedAI
             ? "Here's what I made for you. Every one fits your budget and your house rules."
-            : "Here are some starter meals to get you going. Add your beta key in Settings and I'll make them just for you."} />
+            : "Here are some starter meals to get you going. Add your access code in Settings and I'll make them just for you."} />
           <Heading
             title="Your kitchen is ready."
             sub={starterMeals.length ? `${starterMeals.length} meals picked for your family.` : 'Your library is ready for your first meals.'}
@@ -899,6 +916,7 @@ Return ONLY a JSON array, no other text:
   }
 
   if (step === 6) {
+    if (!needsCode) isLast = true;
     const customTypes = mealTypes.filter(t => !MEAL_TYPES.includes(t));
     host = 'Pick the meals that get clean plates and zero complaints.';
     title = 'What does your crew actually eat?';
@@ -921,32 +939,36 @@ Return ONLY a JSON array, no other text:
 
   if (step === 7) {
     isLast = true;
-    host = "You're early, so there's one techy step. This goes away when we officially launch.";
-    title = 'One quick beta step';
-    sub = 'Paste the key I sent you to turn on the smart features.';
+    host = "You're one of my first testers! Pop in the code I sent you and I'll turn on the smart stuff.";
+    title = 'Your tester code';
+    sub = 'It unlocks meal ideas, recipes, and food photos.';
     skip = 'Skip for now';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ background: C.goldLight, border: `1px solid ${C.gold}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#7A5F1C' }}>For beta testers only</div>
-          {['Build My Week plans all 7 days for you', 'Instant recipes for any meal', 'Your personal starter menu'].map(t => (
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#7A5F1C' }}>Your code turns on</div>
+          {['Build My Week plans all 7 days for you', 'Instant recipes for any meal', 'Food photos and your personal starter menu'].map(t => (
             <div key={t} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, color: C.text }}>
               <i className="ti ti-check" style={{ fontSize: 18, color: C.teal }} />{t}
             </div>
           ))}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label htmlFor="gitk-beta-key" style={{ fontSize: 14, fontWeight: 600, color: C.sec, margin: 0 }}>Your beta key</label>
+          <label htmlFor="gitk-beta-code" style={{ fontSize: 14, fontWeight: 600, color: C.sec, margin: 0 }}>Tester code</label>
           <input
-            id="gitk-beta-key"
-            type="password"
+            id="gitk-beta-code"
             autoComplete="off"
-            value={apiKeyInput}
-            onChange={e => setApiKeyInput(e.target.value)}
-            placeholder="Paste it here"
-            style={{ height: 50, fontSize: 15, borderRadius: 12 }}
+            autoCapitalize="characters"
+            value={codeInput}
+            onChange={e => { setCodeInput(e.target.value); setCodeError(''); }}
+            placeholder="Like KITCHEN2026"
+            aria-invalid={!!codeError}
+            aria-describedby="gitk-code-help"
+            style={{ height: 50, fontSize: 17, fontWeight: 700, letterSpacing: '0.04em', borderRadius: 12, borderColor: codeError ? '#9B1C1C' : undefined }}
           />
-          <div style={{ fontSize: 13, color: C.sec }}>Saved only on this device.</div>
+          <div id="gitk-code-help" role={codeError ? 'alert' : undefined} style={{ fontSize: 13, color: codeError ? '#9B1C1C' : C.sec, fontWeight: codeError ? 600 : 400 }}>
+            {checkingCode ? 'Checking your code...' : codeError || "Didn't get one? You can add it later in Settings."}
+          </div>
         </div>
       </div>
     );
@@ -989,9 +1011,9 @@ Return ONLY a JSON array, no other text:
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
           {isLast
-            ? <PrimaryButton onClick={finish}>Build my kitchen</PrimaryButton>
+            ? <PrimaryButton onClick={() => finish(false)} disabled={checkingCode}>{checkingCode ? 'Checking...' : 'Build my kitchen'}</PrimaryButton>
             : <PrimaryButton onClick={next}>Continue</PrimaryButton>}
-          {skip && <TextButton onClick={isLast ? finish : next}>{skip}</TextButton>}
+          {skip && <TextButton onClick={isLast ? () => finish(true) : next}>{skip}</TextButton>}
         </div>
       </div>
     </div>

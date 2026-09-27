@@ -8,20 +8,29 @@ const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'));
 
 const daysOld = (t) => Math.floor((Date.now() - t) / 86400000);
 
+// Shrinks a phone photo before sending it. Full size photos are often too
+// big to send, and smaller ones are faster and cheaper to read.
+function resizeImage(file, maxSide = 1280) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+    img.src = url;
+  });
+}
+
 // Analyze fridge/pantry photo using Claude vision
-async function analyzeFridgePhoto(base64Image, apiKey) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
-      messages: [{
+async function analyzeFridgePhoto(base64Image, callClaude) {
+  const text = await callClaude([{
         role: 'user',
         content: [
           {
@@ -42,12 +51,10 @@ Only include items you can clearly identify. Do not guess. Return ONLY a JSON ar
 [{"name":"","qty":"","category":"Pantry Staples","type":"shelf"}]`
           }
         ]
-      }]
-    })
-  });
-  const data = await res.json();
-  const text = data.content?.[0]?.text || '[]';
-  return JSON.parse(text.replace(/```json|```/g, '').trim());
+  }], 1500);
+  const clean = (text || '[]').replace(/```json|```/g, '').trim();
+  const start = clean.indexOf('['), end = clean.lastIndexOf(']');
+  return JSON.parse(start !== -1 && end !== -1 ? clean.slice(start, end + 1) : '[]');
 }
 
 const TYPE_OPTIONS = [
@@ -150,7 +157,7 @@ function EditSheet({ item, onSave, onClose }) {
 }
 
 export default function PantryScreen({ store }) {
-  const { pantry, addPantryItem, removePantryItem, restockPantryItem, confirmPantryItem, markPantryUsedUp, tossPantryItem, meals, setPantry, apiKey } = store;
+  const { pantry, addPantryItem, removePantryItem, restockPantryItem, confirmPantryItem, markPantryUsedUp, tossPantryItem, meals, setPantry, hasAI, callClaude } = store;
 
   // After "Used it up", offer to put it on the grocery list
   const [usedUpPrompt, setUsedUpPrompt] = useState(null);
@@ -280,19 +287,14 @@ export default function PantryScreen({ store }) {
   const handleFridgePhoto = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!apiKey) {
-      alert('Add your Anthropic API key in Settings to use fridge scanning.');
+    if (!hasAI) {
+      alert('Add your beta access code in Settings to use fridge scanning.');
       return;
     }
     setFridgeAnalyzing(true);
     try {
-      const base64 = await new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result.split(',')[1]);
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      });
-      const items = await analyzeFridgePhoto(base64, apiKey);
+      const base64 = await resizeImage(file);
+      const items = await analyzeFridgePhoto(base64, callClaude);
       if (!items.length) {
         alert('No food items detected. Try a clearer photo with better lighting.');
         setFridgeAnalyzing(false);
@@ -304,7 +306,7 @@ export default function PantryScreen({ store }) {
       setFridgeResults(items);
       setFridgeSelected(selected);
     } catch (err) {
-      alert('Could not analyze photo. Check your API key and try again.');
+      alert('Could not read that photo. Try again with good lighting, or check your access code in Settings.');
     }
     setFridgeAnalyzing(false);
   };

@@ -157,13 +157,11 @@ function RuleCard({ title, sub, children }) {
 // Screen
 // ---------------------------------------------------------------------------
 export default function SettingsScreen({ store }) {
-  const { apiKey, setApiKey, prefs, setPrefs, unsplashKey, setUnsplashKey } = store;
+  const { prefs, setPrefs, betaCode, setBetaCode, checkBetaCode, apiKey } = store;
 
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [newKey, setNewKey] = useState('');
-  const [keySaved, setKeySaved] = useState(false);
-  const [newUnsplashKey, setNewUnsplashKey] = useState('');
-  const [unsplashSaved, setUnsplashSaved] = useState(false);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [codeStatus, setCodeStatus] = useState(''); // '' | checking | saved | error | offline
   const [newStore, setNewStore] = useState('');
   const [editSheet, setEditSheet] = useState(null); // household | foodrules | stores | budget | proteins | mealtypes
 
@@ -181,10 +179,17 @@ export default function SettingsScreen({ store }) {
   const houseRules = prefs?.houseRules || [];
   const healthGoals = prefs?.healthGoals || [];
 
-  const saveKey = () => {
-    if (!newKey.trim().startsWith('sk-ant-')) { alert("That doesn't look like a beta key. It should start with sk-ant-"); return; }
-    setApiKey(newKey.trim()); setKeySaved(true); setNewKey('');
-    setTimeout(() => setKeySaved(false), 2000);
+  const saveCode = async () => {
+    const code = codeInput.trim();
+    if (!code) return;
+    setCodeStatus('checking');
+    const result = await checkBetaCode(code);
+    if (!result.ok) { setCodeStatus(result.offline ? 'offline' : 'error'); return; }
+    setBetaCode(code);
+    setCodeInput('');
+    setShowCodeInput(false);
+    setCodeStatus('saved');
+    setTimeout(() => setCodeStatus(''), 2500);
   };
 
   // ----- Food rules (always keeps dietary in sync for other screens) -----
@@ -310,58 +315,41 @@ export default function SettingsScreen({ store }) {
           ))}
         </div>
 
-        {/* Beta key */}
+        {/* Tester access */}
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>Smart features</div>
-        <div className="card mb-20" style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Your beta key</div>
-          <p className="text-sm mb-12">Turns on Build My Week, recipes, and your starter menu. Stored only on this device.</p>
-          {apiKey ? (
-            <div className="flex items-center gap-8 mb-8">
-              <Icon name="check" size={16} style={{ color: 'var(--green)' }} />
-              <span className="text-sm" style={{ color: 'var(--green)' }}>Beta key saved</span>
-              <button onClick={() => setShowApiKey(!showApiKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13 }}>
-                {showApiKey ? 'Hide' : 'Change'}
-              </button>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Tester code</div>
+          <p className="text-sm mb-12">Turns on Build My Week, recipes, fridge scanning, and food photos.</p>
+          {betaCode && !showCodeInput ? (
+            <div className="flex items-center gap-8">
+              <Icon name="circle-check" size={18} style={{ color: 'var(--teal)' }} />
+              <span className="text-sm" style={{ color: 'var(--teal)', fontWeight: 600 }}>
+                {codeStatus === 'saved' ? 'Code saved. You are all set!' : 'Connected. Smart features are on.'}
+              </span>
+              <button onClick={() => setShowCodeInput(true)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13, fontFamily: 'inherit' }}>Change</button>
             </div>
           ) : (
-            <div className="banner banner-warning mb-8">
-              <Icon name="alert-triangle" size={14} /> No beta key yet, so smart features are off.
-            </div>
-          )}
-          {(!apiKey || showApiKey) && (
             <div>
-              <input type="password" autoComplete="off" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="Paste your beta key" className="mb-8" />
-              <Button variant="primary" onClick={saveKey}>
-                {keySaved ? <><Icon name="check" size={16} /> Saved</> : 'Save beta key'}
+              {!betaCode && !apiKey && (
+                <div className="banner banner-warning mb-8">
+                  <Icon name="alert-triangle" size={14} /> No tester code yet, so smart features are off.
+                </div>
+              )}
+              <label htmlFor="settings-code">Tester code</label>
+              <input id="settings-code" autoComplete="off" autoCapitalize="characters" value={codeInput}
+                onChange={e => { setCodeInput(e.target.value); setCodeStatus(''); }}
+                onKeyDown={e => e.key === 'Enter' && saveCode()}
+                placeholder="Like KITCHEN2026" className="mb-8" style={{ fontWeight: 700, letterSpacing: '0.04em' }} />
+              {(codeStatus === 'error' || codeStatus === 'offline') && (
+                <div role="alert" style={{ fontSize: 13, color: '#9B1C1C', fontWeight: 600, marginBottom: 8 }}>
+                  {codeStatus === 'error' ? "That code didn't work. Double-check it and try again." : "Couldn't reach the app right now. Check your internet."}
+                </div>
+              )}
+              <Button variant="primary" onClick={saveCode}>
+                {codeStatus === 'checking' ? 'Checking...' : 'Save code'}
               </Button>
             </div>
           )}
-        </div>
-
-        {/* Pexels key */}
-        <div className="card mb-20" style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Photo key (Pexels)</div>
-          <p className="text-sm mb-12">Pulls food photos for your meal library.</p>
-          {unsplashKey ? (
-            <div className="flex items-center gap-8 mb-8">
-              <Icon name="check" size={16} style={{ color: 'var(--teal)' }} />
-              <span className="text-sm" style={{ color: 'var(--teal)' }}>Photo key saved, photos are on</span>
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: 'var(--gold-dark)', background: 'var(--gold-light)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
-              No photo key yet, so meal photos won't load
-            </div>
-          )}
-          <input type="password" autoComplete="off" value={newUnsplashKey} onChange={e => setNewUnsplashKey(e.target.value)} placeholder="Paste your photo key" className="mb-8" />
-          <Button variant="primary" onClick={() => {
-            if (!newUnsplashKey.trim()) return;
-            setUnsplashKey(newUnsplashKey.trim());
-            setUnsplashSaved(true);
-            setNewUnsplashKey('');
-            setTimeout(() => setUnsplashSaved(false), 2000);
-          }}>
-            {unsplashSaved ? <><Icon name="check" size={16} /> Saved</> : 'Save photo key'}
-          </Button>
         </div>
 
         <Divider />

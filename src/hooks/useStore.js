@@ -10,6 +10,7 @@ const KEYS = {
   apiKey: 'gitk_api_key',
   unsplashKey: 'gitk_unsplash_key',
   onboarded: 'gitk_onboarded',
+  betaCode: 'gitk_beta_code',
   prefs: 'gitk_prefs',
 };
 
@@ -42,6 +43,22 @@ const logPantryAction = (item, action) => {
 
 const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 
+// A tester can open gettinginthekitchen.com/?code=KITCHEN2026 and the code
+// is saved automatically, then removed from the address bar.
+const readCodeFromLink = () => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const code = (params.get('code') || '').trim();
+    if (code) {
+      localStorage.setItem('gitk_beta_code', code);
+      params.delete('code');
+      const rest = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (rest ? '?' + rest : '') + window.location.hash);
+    }
+  } catch {}
+  return localStorage.getItem('gitk_beta_code') || '';
+};
+
 const loadItem = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
@@ -59,6 +76,7 @@ export default function useStore() {
   const [actuals, _setActuals] = useState(() => loadItem(KEYS.actuals, {}));
   const [apiKey, _setApiKey] = useState(() => localStorage.getItem(KEYS.apiKey) || '');
   const [unsplashKey, _setUnsplashKey] = useState(() => localStorage.getItem(KEYS.unsplashKey) || '');
+  const [betaCode, _setBetaCode] = useState(readCodeFromLink);
   const [onboarded, _setOnboarded] = useState(() => loadItem(KEYS.onboarded, false));
   const [prefs, _setPrefs] = useState(() => loadItem(KEYS.prefs, { householdSize: '2', dietary: [], stores: ['Aldi', 'Walmart', 'Costco'] }));
   const [activeWeek, setActiveWeek] = useState(0);
@@ -94,6 +112,11 @@ export default function useStore() {
   const setActuals = useCallback((v) => { const val = typeof v === 'function' ? v(actuals) : v; _setActuals(val); saveItem(KEYS.actuals, val); }, [actuals]);
   const setApiKey = useCallback((v) => { _setApiKey(v); localStorage.setItem(KEYS.apiKey, v); }, []);
   const setUnsplashKey = useCallback((v) => { _setUnsplashKey(v); localStorage.setItem(KEYS.unsplashKey, v); }, []);
+  const setBetaCode = useCallback((v) => { const c = String(v || '').trim(); _setBetaCode(c); localStorage.setItem(KEYS.betaCode, c); }, []);
+
+  // Smart features work with a beta access code (no keys needed) or a personal key
+  const hasAI = Boolean(betaCode || apiKey);
+  const hasPhotos = Boolean(betaCode || unsplashKey);
   const setOnboarded = useCallback((v) => { _setOnboarded(v); saveItem(KEYS.onboarded, v); }, []);
   const setPrefs = useCallback((v) => { const val = typeof v === 'function' ? v(prefs) : v; _setPrefs(val); saveItem(KEYS.prefs, val); }, [prefs]);
 
@@ -211,23 +234,84 @@ export default function useStore() {
     return item || null;
   }, [setPantry]);
 
-  const apiFetch = useCallback(async (prompt, maxTokens = 1000) => {
+  // Sends a request to Claude. With a beta code it goes through the app's own
+  // server (/api/claude), which holds the real key. A personal key still works too.
+  const callClaude = useCallback(async (messages, maxTokens = 1000) => {
+    const code = localStorage.getItem(KEYS.betaCode) || '';
     const key = localStorage.getItem(KEYS.apiKey) || '';
-    if (!key) throw new Error('No API key');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-    });
-    const data = await res.json();
+    let data = null;
+
+    if (code) {
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-gitk-code': code },
+        body: JSON.stringify({ messages, max_tokens: maxTokens }),
+      });
+      if (res.status === 401 && !key) throw new Error('bad_code');
+      if (res.ok) data = await res.json();
+      else if (!key) throw new Error('AI request failed (' + res.status + ')');
+    }
+
+    if (!data && key) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages }),
+      });
+      data = await res.json();
+    }
+
+    if (!data) throw new Error('No access code');
     const tb = (data.content || []).find(b => b.type === 'text');
     if (!tb) throw new Error('No response');
-    return tb.text.trim().replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+    return tb.text.trim();
+  }, []);
+
+  const apiFetch = useCallback(async (prompt, maxTokens = 1000) => {
+    const text = await callClaude([{ role: 'user', content: prompt }], maxTokens);
+    return text.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+  }, [callClaude]);
+
+  // Finds a food photo. Returns an image address or null.
+  const fetchPhoto = useCallback(async (query) => {
+    const code = localStorage.getItem(KEYS.betaCode) || '';
+    const key = localStorage.getItem(KEYS.unsplashKey) || '';
+    try {
+      if (code) {
+        const res = await fetch('/api/photos?q=' + encodeURIComponent(query), { headers: { 'x-gitk-code': code } });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) return data.url;
+        }
+      }
+      if (key) {
+        const res = await fetch(
+          'https://api.pexels.com/v1/search?query=' + encodeURIComponent(query) + '&per_page=5&orientation=landscape',
+          { headers: { Authorization: key } }
+        );
+        const data = await res.json();
+        const top = (data.photos || []).slice(0, 3);
+        if (!top.length) return null;
+        return top[Math.floor(Math.random() * top.length)].src?.medium || null;
+      }
+    } catch {}
+    return null;
+  }, []);
+
+  // Checks a beta code with the server. Returns { ok, ai, photos }.
+  const checkBetaCode = useCallback(async (code) => {
+    try {
+      const res = await fetch('/api/check', { headers: { 'x-gitk-code': String(code || '').trim() } });
+      const data = await res.json();
+      return { ok: res.ok && data.ok, ai: !!data.ai, photos: !!data.photos };
+    } catch {
+      return { ok: false, offline: true };
+    }
   }, []);
 
   return {
@@ -240,9 +324,10 @@ export default function useStore() {
     budget, setBudget,
     actuals, setActuals,
     apiKey, setApiKey, unsplashKey, setUnsplashKey,
+    betaCode, setBetaCode, checkBetaCode, hasAI, hasPhotos,
     onboarded, setOnboarded,
     prefs, setPrefs,
-    apiFetch,
+    apiFetch, callClaude, fetchPhoto,
     mealsRef, plansRef, activeWeekRef,
   };
 }
