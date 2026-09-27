@@ -470,6 +470,9 @@ Respond ONLY with JSON, no other text:
           isFood: it.isFood !== false,
           category: PANTRY_CATEGORIES.includes(it.category) ? it.category : 'Pantry Staples',
           type: ['fresh', 'frozen', 'shelf'].includes(it.type) ? it.type : 'shelf',
+          // Counts toward the grocery budget. Non-food starts unchecked.
+          count: it.isFood !== false,
+          // Goes into the pantry (only for items that count)
           add: it.isFood !== false,
         }));
       if (!newItems.length && !(Number(r.total) > 0)) {
@@ -504,16 +507,37 @@ Respond ONLY with JSON, no other text:
   const updateReceiptItem = (key, changes) =>
     setReceipt(prev => ({ ...prev, items: prev.items.map(it => it.key === key ? { ...it, ...changes } : it) }));
 
+  // Grocery total = receipt total minus items she marked as not groceries,
+  // including their share of any sales tax
+  const receiptMath = (r) => {
+    if (!r) return { receiptTotal: 0, excluded: 0, groceryTotal: 0 };
+    const receiptTotal = parseFloat(r.total) || 0;
+    const itemsSum = r.items.reduce((s, it) => s + (Number(it.price) || 0), 0);
+    const excludedRaw = r.items.filter(it => !it.count).reduce((s, it) => s + (Number(it.price) || 0), 0);
+    const ratio = itemsSum > 0 && receiptTotal >= itemsSum && receiptTotal / itemsSum < 1.2 ? receiptTotal / itemsSum : 1;
+    const excluded = Math.round(excludedRaw * ratio * 100) / 100;
+    return { receiptTotal, excluded, groceryTotal: Math.max(0, Math.round((receiptTotal - excluded) * 100) / 100) };
+  };
+
+  // Removes a saved trip from history (for mistakes or test entries)
+  const deleteTrip = (trip) => {
+    if (!window.confirm(`Delete the $${(trip.total || 0).toFixed(2)} trip from ${trip.date}?`)) return;
+    const updated = tripHistory.filter(t => t !== trip);
+    setTripHistory(updated);
+    localStorage.setItem('gitk_trip_history', JSON.stringify(updated));
+  };
+
   // Logs the trip, stocks the pantry, and checks off matching grocery list items
   const saveReceipt = () => {
     if (!receipt) return;
-    const total = parseFloat(receipt.total);
-    if (!(total > 0)) { setReceiptError('Add the receipt total before saving.'); return; }
+    const { receiptTotal, excluded, groceryTotal } = receiptMath(receipt);
+    if (!(receiptTotal > 0)) { setReceiptError('Add the receipt total before saving.'); return; }
+    const total = groceryTotal;
     const storeName = receipt.store || 'Other';
     const when = dateFromKey(receipt.date);
     const dateLabel = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-    const already = tripHistory.some(t => t.date === dateLabel && Math.abs((t.total || 0) - total) < 0.01);
+    const already = tripHistory.some(t => t.date === dateLabel && (Math.abs((t.total || 0) - total) < 0.01 || Math.abs((t.receiptTotal || 0) - receiptTotal) < 0.01));
     if (already && !window.confirm('A trip with this date and total is already saved. Save it again?')) return;
 
     const t = {
@@ -525,18 +549,20 @@ Respond ONLY with JSON, no other text:
       budget: perTripBudget,
       monthlyBudget,
       source: 'receipt',
+      receiptTotal,
+      notGroceries: excluded,
       // Real prices from her stores, saved for better cost estimates later
-      items: receipt.items.map(it => ({ name: it.name, price: it.price, qty: it.qty, store: storeName })),
+      items: receipt.items.filter(it => it.count).map(it => ({ name: it.name, price: it.price, qty: it.qty, store: storeName })),
     };
     const updated = [t, ...tripHistory];
     setTripHistory(updated);
     localStorage.setItem('gitk_trip_history', JSON.stringify(updated));
 
-    const toPantry = receipt.items.filter(it => it.add && it.isFood);
+    const toPantry = receipt.items.filter(it => it.count && it.add && it.isFood);
     toPantry.forEach(it => addPantryItem({ name: it.name, qty: it.qty, category: it.category, type: it.type, fresh: it.type === 'fresh' }));
 
     // Anything on the list that shows up on the receipt counts as bought
-    const bought = allItems.filter(li => receipt.items.some(it => listItemMatches(li.name, it.name)));
+    const bought = allItems.filter(li => receipt.items.some(it => it.count && listItemMatches(li.name, it.name)));
     if (bought.length) {
       const keys = bought.map(li => li.name + '|' + li.source);
       setRemoved(prev => new Set([...prev, ...keys]));
@@ -546,7 +572,8 @@ Respond ONLY with JSON, no other text:
 
     setReceipt(null);
     setReceiptError('');
-    showToast(`Saved $${total.toFixed(2)} at ${storeName}.`
+    showToast(`Saved $${total.toFixed(2)} in groceries at ${storeName}`
+      + (excluded > 0 ? ` (left out $${excluded.toFixed(2)} of other stuff).` : '.')
       + (toPantry.length ? ` ${toPantry.length} item${toPantry.length !== 1 ? 's' : ''} in your pantry.` : '')
       + (bought.length ? ` ${bought.length} checked off your list.` : '')
       + ' ' + tripVerdict(total));
@@ -903,7 +930,7 @@ Respond ONLY with JSON, no other text:
                   <input id="rc-date" type="date" value={receipt.date} onChange={e => setReceipt(p => ({ ...p, date: e.target.value }))} style={{ height: 42 }} />
                 </div>
                 <div>
-                  <label htmlFor="rc-total">Total paid</label>
+                  <label htmlFor="rc-total">Receipt total</label>
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>$</span>
                     <input id="rc-total" type="number" step="0.01" inputMode="decimal" value={receipt.total} placeholder="0.00"
@@ -921,23 +948,54 @@ Respond ONLY with JSON, no other text:
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div style={{ fontSize: 14, fontWeight: 800 }}>{receipt.items.length} item{receipt.items.length !== 1 ? 's' : ''} found</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Checked items go to your pantry</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Uncheck anything that isn't groceries</div>
               </div>
               {receipt.items.map(it => (
-                <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
-                  <input type="checkbox" checked={it.add} onChange={e => updateReceiptItem(it.key, { add: e.target.checked })}
-                    aria-label={`Add ${it.name} to pantry`} style={{ width: 20, height: 20, flexShrink: 0, accentColor: '#0A3D35' }} />
+                <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid var(--border)', opacity: it.count ? 1 : 0.6 }}>
+                  <input type="checkbox" checked={it.count} onChange={e => updateReceiptItem(it.key, { count: e.target.checked })}
+                    aria-label={`Count ${it.name} as groceries`} style={{ width: 20, height: 20, flexShrink: 0, accentColor: '#0A3D35' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <input value={it.name} onChange={e => updateReceiptItem(it.key, { name: e.target.value })}
                       aria-label="Item name" style={{ height: 34, fontSize: 14, fontWeight: 600, padding: '4px 8px' }} />
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
-                      {it.receiptText && <span>{it.receiptText}</span>}
-                      {it.isFood ? <span>{it.receiptText ? ' · ' : ''}{it.category}, {it.type}</span> : <span>{it.receiptText ? ' · ' : ''}not food</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                      {it.receiptText && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{it.receiptText}</span>}
+                      {it.count ? (
+                        <button type="button" onClick={() => updateReceiptItem(it.key, { add: !it.add })} aria-pressed={it.add} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                          fontFamily: 'inherit', cursor: 'pointer',
+                          border: it.add ? '1px solid #0A3D35' : '1px solid var(--border)',
+                          background: it.add ? 'var(--teal-light)' : '#fff', color: it.add ? '#0A3D35' : 'var(--text-secondary)',
+                        }}>
+                          <Icon name={it.add ? 'check' : 'plus'} size={11} />{it.add ? 'Adding to pantry' : 'Add to pantry'}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Not groceries, left out of your total</span>
+                      )}
                     </div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--teal)', flexShrink: 0 }}>{it.price ? '$' + it.price.toFixed(2) : ''}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: it.count ? 'var(--teal)' : 'var(--text-secondary)', textDecoration: it.count ? 'none' : 'line-through', flexShrink: 0 }}>
+                    {it.price ? '$' + it.price.toFixed(2) : ''}
+                  </div>
                 </div>
               ))}
+
+              {(() => {
+                const m = receiptMath(receipt);
+                if (!(m.receiptTotal > 0)) return null;
+                return (
+                  <div style={{ marginTop: 14, background: 'var(--teal-light)', borderRadius: 12, padding: '12px 14px', fontSize: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Receipt total</span><span>${m.receiptTotal.toFixed(2)}</span></div>
+                    {m.excluded > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginTop: 4 }}>
+                        <span>Not groceries (with tax)</span><span>- ${m.excluded.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--teal)', marginTop: 6, paddingTop: 6, borderTop: '1px solid #9ED0BC' }}>
+                      <span>Counts toward your budget</span><span>${m.groceryTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <button type="button" onClick={() => receiptInput.current?.click()} disabled={receiptBusy} style={{
                 marginTop: 14, width: '100%', padding: 12, borderRadius: 10, border: '1.5px dashed var(--teal)', background: 'var(--teal-light)',
@@ -955,7 +1013,11 @@ Respond ONLY with JSON, no other text:
                 width: '100%', height: 50, borderRadius: 12, border: 'none', background: 'var(--teal)', color: '#fff',
                 fontSize: 15, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
               }}>
-                Save trip{receipt.items.filter(i => i.add && i.isFood).length ? ` and add ${receipt.items.filter(i => i.add && i.isFood).length} to pantry` : ''}
+                {(() => {
+                  const n = receipt.items.filter(i => i.count && i.add && i.isFood).length;
+                  const m = receiptMath(receipt);
+                  return `Save $${m.groceryTotal.toFixed(2)} trip` + (n ? ` and add ${n} to pantry` : '');
+                })()}
               </button>
             </div>
           </div>
@@ -1041,9 +1103,16 @@ Respond ONLY with JSON, no other text:
                           <div style={{ marginTop: 14, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Trips</div>
                             {month.trips.map((t, ti) => (
-                              <div key={ti} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: ti < month.trips.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t.date}</span>
+                              <div key={ti} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: ti < month.trips.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                                <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
+                                  {t.date}{t.stores ? ' \u00b7 ' + Object.keys(t.stores).join(', ') : ''}
+                                  {t.source === 'receipt' && <Icon name="receipt" size={12} style={{ marginLeft: 6, verticalAlign: '-1px' }} />}
+                                </span>
                                 <span style={{ fontSize: 13, fontWeight: 600, color: t.total > t.budget ? 'var(--danger)' : 'var(--green)' }}>${t.total.toFixed(2)}</span>
+                                <button type="button" onClick={() => deleteTrip(t)} aria-label={`Delete trip from ${t.date}`}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4, display: 'flex' }}>
+                                  <Icon name="trash" size={14} />
+                                </button>
                               </div>
                             ))}
                           </div>
