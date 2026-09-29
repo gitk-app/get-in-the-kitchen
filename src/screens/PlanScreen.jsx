@@ -324,8 +324,30 @@ When you use one of MY SAVED MEALS, copy its name exactly as written. When the s
 Respond ONLY with this exact JSON structure, no other text:
 {"Sunday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Monday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Tuesday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Wednesday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Thursday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Friday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Saturday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}}}`;
     try {
-      const text = await apiFetch(prompt, 2000);
-      const weekPlan = parseJson(text);
+      const text = await apiFetch(prompt, 2400);
+      let weekPlan = parseJson(text);
+
+      // Adds up the AI's cost for every meal in a plan
+      const planCost = (wp) => DAYS.reduce((sum, day) => sum + PLAN_SLOTS.reduce((s2, slot) => {
+        const c = Number(wp?.[day]?.[slot]?.cost);
+        return s2 + (c > 0 ? c : 0);
+      }, 0), 0);
+
+      // If the plan came in well under her target, ask once for a heartier version
+      const firstCost = planCost(weekPlan);
+      if (firstCost > 0 && firstCost < targetCost * 0.8) {
+        try {
+          const revisePrompt = `${prompt}
+
+Here is a draft plan that only adds up to about $${Math.round(firstCost)}, but the target is about $${targetCost}:
+${JSON.stringify(weekPlan)}
+
+Revise it so the week adds up close to $${targetCost}. Keep the same rules, batch cooking, and food safety rules. Upgrade meals rather than making them fancy: heartier dinners, more protein, fresh fruit and vegetable sides, fuller lunches. Keep simple names. Respond ONLY with the full JSON plan in the same format.`;
+          const revised = parseJson(await apiFetch(revisePrompt, 2400));
+          if (planCost(revised) > firstCost) weekPlan = revised;
+        } catch (e) { /* keep the first plan */ }
+      }
+      const plannedCost = planCost(weekPlan);
 
       const newMealRecords = [];
       const newPlan = {};
@@ -350,6 +372,12 @@ Respond ONLY with this exact JSON structure, no other text:
             if ((batchCook || fromBatch) && !newMealRecords.includes(match)) {
               store.setMeals(prev => prev.map(m => m.id === match.id ? { ...m, batchCook, fromBatch, batchSource, batchProtein } : m));
             }
+            // Older library meals often have a per-person cost. Use the household estimate
+            // until the full recipe is written with a real cost.
+            const est = Number(entry?.cost);
+            if (est > 0 && match.recipeVersion !== 2 && est > (match.cost || 0) * 1.3 && !newMealRecords.includes(match)) {
+              store.setMeals(prev => prev.map(m => m.id === match.id ? { ...m, cost: Math.round(est * 100) / 100 } : m));
+            }
             newPlan[day][slot] = match.id;
           } else {
             const newId = 'm' + Date.now() + '-' + day + '-' + slot + '-' + Math.random().toString(36).slice(2, 6);
@@ -371,7 +399,8 @@ Respond ONLY with this exact JSON structure, no other text:
       {
         const planned = Object.values(newPlan).reduce((n, d) => n + Object.values(d || {}).filter(Boolean).length, 0);
         showToast(`Your week is ready${firstName ? ', ' + firstName : ''}! ${planned} meals planned`
-          + (newMealRecords.length ? `, including ${newMealRecords.length} new ones. I'm writing their recipes and grocery items now.` : ' from meals you already know.'));
+          + (plannedCost > 0 ? ` for about $${Math.round(plannedCost)} of your $${targetCost} target` : '')
+          + (newMealRecords.length ? `, including ${newMealRecords.length} new ones. I'm writing their recipes now.` : '.'));
       }
 
       // Generate steps in background for new meals
