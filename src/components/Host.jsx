@@ -13,6 +13,10 @@ export const HOST_NAME = 'Nia';
 // and set HOST_IMAGE to '/nia.png'. Leave it empty to show the Nia monogram.
 export const HOST_IMAGE = '/nia.png';
 
+// Optional second picture of Nia with her mouth closed (same size and framing).
+// When set, the app flips between the two while she "talks". Leave empty to skip.
+export const HOST_IMAGE_CLOSED = '';
+
 const TEAL = '#0A3D35';
 const GOLD = '#C9A84C';
 
@@ -27,6 +31,9 @@ export function HostStyles() {
       @keyframes gitkDot { 0%,100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-3px); opacity: 1; } }
       @keyframes gitkSteam { 0% { transform: translateY(2px); opacity: 0; } 40% { opacity: 0.9; } 100% { transform: translateY(-4px); opacity: 0; } }
       @keyframes gitkSpeak { 0%,100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); } 50% { box-shadow: 0 0 0 5px rgba(201,168,76,0.35); } }
+      @keyframes gitkNod { 0%,100% { transform: rotate(0deg) translateY(0); } 25% { transform: rotate(-2deg) translateY(-1px); } 50% { transform: rotate(0deg) translateY(0); } 75% { transform: rotate(2deg) translateY(-1px); } }
+      .gitk-nod { animation: gitkNod 0.9s ease-in-out 1.2s 2; transform-origin: 50% 90%; }
+      .gitk-nod-quick { animation: gitkNod 0.9s ease-in-out 0.2s 2; transform-origin: 50% 90%; }
       .gitk-bob { animation: gitkBob 3.2s ease-in-out infinite; }
       .gitk-steam { animation: gitkSteam 2.6s ease-in-out infinite; }
       .gitk-speak { animation: gitkSpeak 0.8s ease-in-out 1.2s 3; }
@@ -39,7 +46,7 @@ export function HostStyles() {
       .gitk-text-quick { opacity: 0; animation: gitkTextIn 0.35s ease-out 0.1s forwards; }
       .gitk-d { display: inline-block; animation: gitkDot 0.9s ease-in-out infinite; }
       @media (prefers-reduced-motion: reduce) {
-        .gitk-bob, .gitk-eye, .gitk-mouth, .gitk-mouth-quick, .gitk-d, .gitk-steam, .gitk-speak, .gitk-speak-quick { animation: none; }
+        .gitk-bob, .gitk-eye, .gitk-mouth, .gitk-mouth-quick, .gitk-d, .gitk-steam, .gitk-speak, .gitk-speak-quick, .gitk-nod, .gitk-nod-quick { animation: none; }
         .gitk-dots { animation: none; opacity: 0; }
         .gitk-text, .gitk-text-quick { animation: none; opacity: 1; }
       }
@@ -49,11 +56,20 @@ export function HostStyles() {
 
 // The look itself. For now: a photo if HOST_IMAGE is set, otherwise a gold "N"
 // with the kitchen steam from the logo. Swap this for the illustration later.
-function HostFace({ size }) {
+function HostFace({ size, talk, quick }) {
   // If the picture can't load, fall back to the monogram instead of showing broken text
   const [broken, setBroken] = React.useState(false);
   if (HOST_IMAGE && !broken) {
-    return <img src={HOST_IMAGE} alt={`${HOST_NAME}, your kitchen host`} onError={() => setBroken(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
+    const fill = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' };
+    return (
+      // While she talks: a small nod, and if there's a closed-mouth picture, her mouth flips open and shut
+      <div className={talk ? (quick ? 'gitk-nod-quick' : 'gitk-nod') : undefined} style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <img src={HOST_IMAGE} alt={`${HOST_NAME}, your kitchen host`} onError={() => setBroken(true)} style={fill} />
+        {talk && HOST_IMAGE_CLOSED && (
+          <img src={HOST_IMAGE_CLOSED} alt="" aria-hidden="true" className={quick ? 'gitk-mouth-quick' : 'gitk-mouth'} style={fill} />
+        )}
+      </div>
+    );
   }
   return (
     <svg className="gitk-bob" width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={`${HOST_NAME}, your kitchen host`}>
@@ -78,7 +94,7 @@ export function HostAvatar({ size = 48, ring = 2, bg = TEAL, talk = false, quick
       alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
     }}>
       <HostStyles />
-      <HostFace size={Math.round(size * 0.86)} />
+      <HostFace size={Math.round(size * 0.86)} talk={talk} quick={quick} />
     </div>
   );
 }

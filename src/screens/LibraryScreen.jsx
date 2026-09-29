@@ -158,18 +158,31 @@ export default function LibraryScreen({ store }) {
     setGeneratingFor(id);
     setGenerateError('');
     const guard = recipeGuard(prefs);
-    const prompt = `Simple home-cook recipe for "${mealName}" (${mealSlot}). Practical, budget-friendly.
-Write 5 to 7 short steps, each under 25 words.${guard ? '\n' + guard : ''}
-Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
+    const people = prefs?.householdSize || '2-3';
+    const storeList = [...(prefs?.stores?.length ? prefs.stores : ['Walmart']), 'Pantry'].join('|');
+    // A full, beginner-friendly recipe with measurements, matching the Plan screen
+    const prompt = `Write a complete home-cook recipe for "${mealName}" (${mealSlot}) for ${people} people. Practical and budget-friendly.
+Assume the cook is a beginner:
+- List every ingredient with an amount scaled for ${people} people (for example "2 lb", "1 cup", "1 tsp", "3 cloves"). Include basics like oil, salt, and spices.
+- Write 6 to 10 clear steps. Include heat levels, oven temperatures, cook times, and how to tell when something is done.
+- If the meal uses leftovers, say how much to use and how to reheat safely.
+- For each ingredient, pick a store from: ${storeList}. Use "Pantry" for basics like salt, oil, and spices.
+- Estimate the total cost in US dollars to make it.${guard ? '\n' + guard : ''}
+Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"2 lb","n":"Chicken thighs","s":"store"}],"steps":["step 1","step 2"]}`;
     try {
-      const text = await apiFetch(prompt, 1200);
+      const text = await apiFetch(prompt, 2400);
       const r = parseJson(text);
       if (!Array.isArray(r.steps) || !r.steps.length) throw new Error('No steps');
-      updateMeal(id, { steps: r.steps, prepTime: r.prepTime || 20 });
+      const updates = { steps: r.steps, prepTime: r.prepTime || 20, recipeVersion: 2 };
+      if (Array.isArray(r.items) && r.items.length) {
+        updates.items = r.items.filter(it => it && it.n).map(it => ({ q: String(it.q || ''), n: String(it.n), s: String(it.s || '') }));
+      }
+      if (Number(r.cost) > 0) updates.cost = Math.round(Number(r.cost) * 100) / 100;
+      updateMeal(id, updates);
       // If viewing this recipe, trigger a re-render
       if (recipeView === id) setRecipeView(id);
     } catch (e) {
-      setGenerateError("Couldn't write the steps that time. Try again, or check your tester code in Settings.");
+      setGenerateError("Couldn't write the recipe that time. Try again, or check your tester code in Settings.");
     }
     setGeneratingFor(null);
   };
@@ -384,13 +397,28 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
               <>
                 <SectionLabel>Ingredients</SectionLabel>
                 {recipe.items.map((it, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '0.5px solid var(--border)', fontSize: 14 }}>
-                    <span>{it.n}</span>
-                    <span className="text-xs text-muted">{it.s || ''}</span>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '0.5px solid var(--border)', fontSize: 14 }}>
+                    <span>{it.q && <strong style={{ color: 'var(--teal)', marginRight: 6 }}>{it.q}</strong>}{it.n}</span>
+                    <span className="text-xs text-muted" style={{ flexShrink: 0 }}>{it.s || ''}</span>
                   </div>
                 ))}
                 <div style={{ height: 16 }} />
               </>
+            )}
+            {recipe.steps?.length > 0 && recipe.recipeVersion !== 2 && (
+              <div style={{ background: 'var(--gold-light)', border: '1px solid var(--gold)', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}>
+                  {generatingFor === recipe.id
+                    ? 'Writing the full recipe with measurements. Give me a few seconds...'
+                    : 'Want the full recipe? I can add measurements and step-by-step detail.'}
+                </div>
+                {generateError && <p style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8 }}>{generateError}</p>}
+                {generatingFor !== recipe.id && (
+                  <Button variant="primary" size="sm" onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}>
+                    <Icon name="sparkles" size={14} /> Get the full recipe
+                  </Button>
+                )}
+              </div>
             )}
             {recipe.steps?.length > 0 ? (
               <>
@@ -404,18 +432,18 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
                 <div style={{ height: 8 }} />
                 <Button variant="ghost" size="sm" onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}
                   style={{ width: '100%' }}>
-                  {generatingFor === recipe.id ? 'Regenerating…' : <><Icon name="refresh" size={14} /> Regenerate steps</>}
+                  {generatingFor === recipe.id ? 'Rewriting...' : <><Icon name="refresh" size={14} /> Rewrite the recipe</>}
                 </Button>
               </>
             ) : (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <p className="text-sm text-muted mb-8">No recipe steps yet.</p>
+                <p className="text-sm text-muted mb-8">No recipe yet.</p>
                 {generateError && <p style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8 }}>{generateError}</p>}
                 <Button variant="primary" size="sm" onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}
                   style={{ width: '100%' }} disabled={generatingFor === recipe.id}>
                   {generatingFor === recipe.id
-                    ? <><Icon name="loader" size={14} /> Generating…</>
-                    : <><Icon name="sparkles" size={14} /> Generate steps</>}
+                    ? <><Icon name="loader" size={14} /> Writing the recipe...</>
+                    : <><Icon name="sparkles" size={14} /> Write the recipe</>}
                 </Button>
               </div>
             )}

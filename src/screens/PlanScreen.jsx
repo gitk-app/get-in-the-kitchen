@@ -147,6 +147,8 @@ export default function PlanScreen({ store }) {
   const [wizardLeftovers, setWizardLeftovers] = useState('1-2');
   const [wizardBusyNights, setWizardBusyNights] = useState('Tuesday, Wednesday, Thursday, Friday');
   const [wizardLocked, setWizardLocked] = useState('');
+  // How much of the week's grocery budget to plan for (percent). Remembered for next time.
+  const [budgetUse, setBudgetUse] = useState(() => prefs?.budgetUse || 80);
   const [building, setBuilding] = useState(false);
   const [toast, showToast, hideToast] = useHostToast(9000);
   const firstName = String(prefs?.userName || '').trim().split(/\s+/)[0] || '';
@@ -200,32 +202,30 @@ export default function PlanScreen({ store }) {
     generateSteps(newId, pick.name, slot);
   };
 
-  // Writes recipe steps. Retries once, and shows an error instead of failing silently.
+  // Writes a full, beginner-friendly recipe: ingredients with amounts, detailed steps,
+  // and a cost estimate. Retries once, and shows an error instead of failing silently.
   const generateSteps = async (id, name, slot, attempt = 1) => {
     setStepsStatus(s => ({ ...s, [id]: 'loading' }));
-    // Meals created by Build My Week start with no ingredients or cost, so fill those in too
-    const current = store.mealsRef.current.find(m => m.id === id);
-    const needIngredients = !current?.items?.length;
     const storeList = [...(prefs?.stores?.length ? prefs.stores : ['Walmart']), 'Pantry'].join('|');
     const people = prefs?.householdSize || '2-3';
-    const prompt = needIngredients
-      ? `Simple home-cook recipe for "${name}" (${slot}) for ${people} people. Practical, budget-friendly.
-Write 5 to 7 short steps, each under 25 words. List the ingredients to buy, and estimate the total cost in US dollars to make it.
-For each ingredient, pick a store from: ${storeList}. Use "Pantry" for basics like salt, oil, and spices.${diet.guard ? '\n' + diet.guard : ''}
-Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"n":"ingredient","s":"store"}],"steps":["step 1","step 2","step 3"]}`
-      : `Simple home-cook recipe for "${name}" (${slot}). Practical, budget-friendly.
-Write 5 to 7 short steps, each under 25 words.${diet.guard ? '\n' + diet.guard : ''}
-Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2","step 3"]}`;
+    const prompt = `Write a complete home-cook recipe for "${name}" (${slot}) for ${people} people. Practical and budget-friendly.
+Assume the cook is a beginner:
+- List every ingredient with an amount scaled for ${people} people (for example "2 lb", "1 cup", "1 tsp", "3 cloves"). Include basics like oil, salt, and spices.
+- Write 6 to 10 clear steps. Include heat levels, oven temperatures, cook times, and how to tell when something is done (for example "until no longer pink inside" or "until golden brown").
+- If the meal uses leftovers, say how much to use and how to reheat safely.
+- For each ingredient, pick a store from: ${storeList}. Use "Pantry" for basics most kitchens have, like salt, oil, and spices.
+- Estimate the total cost in US dollars to make it.${diet.guard ? '\n' + diet.guard : ''}
+Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"2 lb","n":"Chicken thighs","s":"store"}],"steps":["step 1","step 2"]}`;
     try {
-      const text = await apiFetch(prompt, needIngredients ? 1600 : 1200);
+      const text = await apiFetch(prompt, 2400);
       const recipe = parseJson(text);
       const steps = Array.isArray(recipe.steps) ? recipe.steps.filter(Boolean) : [];
       if (!steps.length) throw new Error('No steps returned');
-      const updates = { steps, prepTime: recipe.prepTime || 20 };
-      if (needIngredients && Array.isArray(recipe.items)) {
-        updates.items = recipe.items.filter(it => it && it.n).map(it => ({ n: String(it.n), s: String(it.s || '') }));
-        if (Number(recipe.cost) > 0) updates.cost = Math.round(Number(recipe.cost) * 100) / 100;
+      const updates = { steps, prepTime: recipe.prepTime || 20, recipeVersion: 2 };
+      if (Array.isArray(recipe.items) && recipe.items.length) {
+        updates.items = recipe.items.filter(it => it && it.n).map(it => ({ q: String(it.q || ''), n: String(it.n), s: String(it.s || '') }));
       }
+      if (Number(recipe.cost) > 0) updates.cost = Math.round(Number(recipe.cost) * 100) / 100;
       updateMeal(id, updates);
       setStepsStatus(s => { const n = { ...s }; delete n[id]; return n; });
     } catch (e) {
@@ -233,7 +233,7 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
         await new Promise(r => setTimeout(r, 2500));
         return generateSteps(id, name, slot, attempt + 1);
       }
-      console.warn('Could not write steps for', name, e);
+      console.warn('Could not write the recipe for', name, e);
       setStepsStatus(s => ({ ...s, [id]: 'error' }));
     }
   };
@@ -270,6 +270,18 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"steps":["step 1","step 2"
     }
 
     const mealTypeStr = mealTypes.length ? mealTypes.join(', ') : 'American home cooking';
+
+    // Meals already planned in the other weeks, so this week brings variety
+    const otherWeekNames = [];
+    Object.entries(store.plansRef.current || {}).forEach(([wk, days]) => {
+      if (wk === 'week' + activeWeek) return;
+      Object.values(days || {}).forEach(slots => Object.values(slots || {}).forEach(mid => {
+        const m = currentMeals.find(x => x.id === mid);
+        if (m && !otherWeekNames.includes(m.name)) otherWeekNames.push(m.name);
+      }));
+    });
+    const targetCost = Math.round(weeklyBudget * budgetUse / 100);
+    store.setPrefs(p => ({ ...p, budgetUse }));
     const safetyBlock = [
       diet.guard,
       skipProteins.length ? `PROTEINS NOT PICKED THIS WEEK (do not use): ${skipProteins.join(', ')}.` : '',
@@ -285,6 +297,8 @@ LOCKED MEALS: ${wizardLocked || 'none'}
 LEFTOVERS NIGHTS: ${wizardLeftovers}
 PANTRY ON HAND: ${pList.length ? pList.join(', ') : 'not specified'}
 MY SAVED MEALS: ${myMeals || 'none yet'}
+WEEKLY GROCERY TARGET: about $${targetCost} for all 21 meals (the full weekly budget is $${weeklyBudget}). Plan meals that add up close to this target, not far under it. With more room, choose heartier meals, more fresh produce, and better proteins. Keep names simple either way.
+MEALS FROM MY OTHER WEEKS: ${otherWeekNames.length ? otherWeekNames.join('; ') : 'none'}
 
 DIETARY RULES, STRICTLY REQUIRED, NEVER VIOLATE THESE:
 ${safetyBlock}
@@ -302,13 +316,13 @@ MEAL SIMPLICITY RULES:
 - Lunch: leftovers, wrap, sandwich, salad. Under 10 min.
 - Dinner on busy nights: leftovers, quesadillas, eggs, grilled cheese ONLY.
 - NO gourmet meals. Simple plain names only. "Baked chicken thighs" not "herb-crusted chicken".
-- Repeating meals is fine and realistic.
-- Use meals from my saved library whenever possible.
+- Batch leftovers within this week are great. But bring VARIETY across weeks: use at most 5 meals from MEALS FROM MY OTHER WEEKS, and include at least 6 meals that are new to me.
+- Use my saved library for about half the meals, especially favorites, and create new meals for the rest.
 - Scale all meals for ${householdSize} people.
 
-When you use one of MY SAVED MEALS, copy its name exactly as written. When the same meal appears on more than one day (like leftovers), use the exact same name each time. Set isNew:true for meals not in my saved library.
+When you use one of MY SAVED MEALS, copy its name exactly as written. When the same meal appears on more than one day (like leftovers), use the exact same name each time. Set isNew:true for meals not in my saved library. Give every meal an estimated cost in US dollars for the whole household.
 Respond ONLY with this exact JSON structure, no other text:
-{"Sunday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Monday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Tuesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Wednesday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Thursday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Friday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Saturday":{"Breakfast":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}}}`;
+{"Sunday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Monday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Tuesday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Wednesday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Thursday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Friday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}},"Saturday":{"Breakfast":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Lunch":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""},"Dinner":{"name":"","isNew":false,"cost":0,"batchCook":false,"fromBatch":false,"batchSource":"","batchProtein":""}}}`;
     try {
       const text = await apiFetch(prompt, 2000);
       const weekPlan = parseJson(text);
@@ -339,7 +353,7 @@ Respond ONLY with this exact JSON structure, no other text:
             newPlan[day][slot] = match.id;
           } else {
             const newId = 'm' + Date.now() + '-' + day + '-' + slot + '-' + Math.random().toString(36).slice(2, 6);
-            const nm = { id: newId, name, slot, cost: 0, protein: 'none', items: [], steps: [], prepTime: 20, favorite: false, batchCook, fromBatch, batchSource, batchProtein };
+            const nm = { id: newId, name, slot, cost: Number(entry?.cost) > 0 ? Math.round(Number(entry.cost) * 100) / 100 : 0, protein: 'none', items: [], steps: [], prepTime: 20, favorite: false, batchCook, fromBatch, batchSource, batchProtein };
             newMealRecords.push(nm);
             newPlan[day][slot] = newId;
           }
@@ -654,13 +668,29 @@ Respond ONLY with this exact JSON structure, no other text:
               <>
                 <SectionLabel>Ingredients</SectionLabel>
                 {recipe.items.map((it, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '0.5px solid var(--border)', fontSize: 14 }}>
-                    <span>{it.n}</span>
-                    <span className="text-sm text-muted">{it.s}</span>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '0.5px solid var(--border)', fontSize: 14 }}>
+                    <span>{it.q && <strong style={{ color: 'var(--teal)', marginRight: 6 }}>{it.q}</strong>}{it.n}</span>
+                    <span className="text-sm text-muted" style={{ flexShrink: 0 }}>{it.s}</span>
                   </div>
                 ))}
                 <div style={{ height: 16 }} />
               </>
+            )}
+            {recipe.steps?.length > 0 && recipe.recipeVersion !== 2 && (
+              <div style={{ background: 'var(--gold-light)', border: '1px solid var(--gold)', borderRadius: 12, padding: '12px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 180, fontSize: 13, color: 'var(--text)' }}>
+                  {stepsStatus[recipe.id] === 'loading'
+                    ? 'Writing the full recipe with measurements. Give me a few seconds...'
+                    : stepsStatus[recipe.id] === 'error'
+                      ? "Couldn't write it that time. Try again in a moment."
+                      : 'Want the full recipe? I can add measurements and step-by-step detail.'}
+                </div>
+                {stepsStatus[recipe.id] !== 'loading' && (
+                  <Button variant="primary" size="sm" style={{ width: 'auto' }} onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}>
+                    <Icon name="sparkles" size={14} /> Get the full recipe
+                  </Button>
+                )}
+              </div>
             )}
             {recipe.steps?.length > 0 ? (
               <>
@@ -675,16 +705,16 @@ Respond ONLY with this exact JSON structure, no other text:
             ) : (
               <div className="card-flat" style={{ textAlign: 'center' }}>
                 {stepsStatus[recipe.id] === 'loading' ? (
-                  <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>Writing the steps, give me a few seconds...</p>
+                  <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>Writing the full recipe, give me a few seconds...</p>
                 ) : (
                   <>
                     <p className="text-sm mb-8" style={{ color: stepsStatus[recipe.id] === 'error' ? 'var(--danger)' : 'var(--text-secondary)' }}>
                       {stepsStatus[recipe.id] === 'error'
-                        ? "Couldn't write the steps that time. Check your beta key in Settings, then try again."
-                        : 'No recipe steps yet.'}
+                        ? "Couldn't write the recipe that time. Check your tester code in Settings, then try again."
+                        : 'No recipe yet.'}
                     </p>
                     <Button variant="ghost" size="sm" onClick={() => generateSteps(recipe.id, recipe.name, recipe.slot)}>
-                      <Icon name="sparkles" size={14} /> {stepsStatus[recipe.id] === 'error' ? 'Try again' : 'Generate steps'}
+                      <Icon name="sparkles" size={14} /> {stepsStatus[recipe.id] === 'error' ? 'Try again' : 'Write the recipe'}
                     </Button>
                   </>
                 )}
@@ -705,7 +735,7 @@ Respond ONLY with this exact JSON structure, no other text:
                 <HostAvatar size={96} ring={4} talk />
                 <h3 style={{ margin: 0 }}>Building your week...</h3>
                 <p style={{ margin: 0, maxWidth: 340 }}>
-                  I'm planning 7 days around your ${prefs?.monthlyBudget || ''} budget, checking your pantry first, and rotating proteins so nobody gets bored. About 30 seconds.
+                  I'm planning 7 days for about ${Math.round(weeklyBudget * budgetUse / 100)}, checking your pantry first, and mixing in new meals so nobody gets bored. About 30 seconds.
                 </p>
               </div>
             ) : (
@@ -780,6 +810,24 @@ Respond ONLY with this exact JSON structure, no other text:
                   <textarea value={wizardLocked} onChange={e => setWizardLocked(e.target.value)}
                     placeholder="Leave blank if nothing is set yet…"
                     style={{ height: 72, resize: 'none' }} />
+                </div>
+                <div className="divider" />
+                <div className="mb-16">
+                  <h3 style={{ marginBottom: 4 }}>5. How much of this week's budget should I plan for?</h3>
+                  <p className="text-sm mb-12">Spend less to save, or use more for heartier meals and more variety.</p>
+                  <div style={{ background: 'var(--teal-light)', borderRadius: 14, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--teal)' }}>${Math.round(weeklyBudget * budgetUse / 100)}</span>
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>of ${weeklyBudget} this week ({budgetUse}%)</span>
+                    </div>
+                    <label htmlFor="budget-use" style={{ position: 'absolute', left: -9999 }}>Share of weekly budget to plan for</label>
+                    <input id="budget-use" type="range" min="50" max="100" step="5" value={budgetUse}
+                      onChange={e => setBudgetUse(Number(e.target.value))}
+                      style={{ width: '100%', padding: 0, border: 'none', background: 'transparent', accentColor: '#0A3D35' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      <span>Save more</span><span>Balanced</span><span>Use my full budget</span>
+                    </div>
+                  </div>
                 </div>
                 <Button variant="primary" onClick={buildWeek}>
                   <Icon name="sparkles" size={16} /> Build my week
