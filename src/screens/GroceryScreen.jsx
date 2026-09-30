@@ -313,7 +313,7 @@ export default function GroceryScreen({ store, onNavigate }) {
   const tripVerdict = (total) => {
     const diff = perTripBudget - total;
     if (diff >= 1) return `That trip came in $${diff.toFixed(0)} under budget${firstName ? ', ' + firstName : ''}. Love to see it!`;
-    if (diff > -1) return 'Right on budget. That is some fine shopping!';
+    if (diff > -1) return 'Right on budget. Nice work!';
     return `That one ran $${Math.abs(diff).toFixed(0)} over. No stress, we'll lean on pantry meals this week to balance it out.`;
   };
 

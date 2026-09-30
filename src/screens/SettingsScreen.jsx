@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN - SettingsScreen v2.3 (reads shared lists from data/meals.js)
+// Set the Table - SettingsScreen v2.3 (reads shared lists from data/meals.js)
 import React, { useState, useEffect } from 'react';
 import { Icon, Button, Divider, Pill } from '../components/UI';
 import {
@@ -278,10 +278,9 @@ export default function SettingsScreen({ store }) {
       {/* Teal hero header */}
       <div style={{ background: '#0A3D35', padding: '20px 24px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 40, height: 40, borderRadius: 11 }} />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>GET IN THE KITCHEN</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 1 }}>Real meals. Real budget. Real life.</div>
+            <img src="/logo.svg" alt="Set the Table" style={{ height: 34, width: 'auto', display: 'block' }} />
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>Real meals. Real budget. Real life.</div>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
@@ -355,7 +354,7 @@ export default function SettingsScreen({ store }) {
         </div>
 
         <Divider />
-        <p className="text-xs text-muted" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>GET IN THE KITCHEN, beta<br />Real meals. Real budget. Real life.</p>
+        <p className="text-xs text-muted" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Set the Table, beta<br />Real meals. Real budget. Real life.</p>
       </div>
 
       {/* ---------------- Edit sheets ---------------- */}

@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN - App v2.2 - build:20260913-snapfridge
+// Set the Table - App v3.0 (renamed from GET IN THE KITCHEN)
 import React, { useState } from 'react';
 import useStore from './hooks/useStore';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -44,14 +44,9 @@ export default function App() {
     <div className="app-shell">
       {/* Desktop sidebar */}
       <aside className="sidebar">
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-mark">
-            <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 36, height: 36 }} />
-          </div>
-          <div>
-            <div className="sidebar-app-name">GET IN THE KITCHEN</div>
-            <div className="sidebar-tagline">Real meals. Real budget.</div>
-          </div>
+        <div className="sidebar-logo" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <img src="/logo.svg" alt="Set the Table" style={{ height: 34, width: 'auto', maxWidth: '100%' }} />
+          <div className="sidebar-tagline">Real meals. Real budget. Real life.</div>
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(item => (

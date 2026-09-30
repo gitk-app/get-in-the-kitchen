@@ -1,7 +1,7 @@
 import React from 'react';
 
 // ---------------------------------------------------------------------------
-// GET IN THE KITCHEN - the host
+// Set the Table - the host
 // She is the face of the app. Every screen uses these pieces, so swapping in
 // the final illustration later only means changing HostFace below.
 // ---------------------------------------------------------------------------
@@ -86,15 +86,22 @@ function HostFace({ size, talk, quick }) {
 
 // Round avatar with a gold ring
 export function HostAvatar({ size = 48, ring = 2, bg = TEAL, talk = false, quick = false }) {
-  // When she's "talking", a soft gold glow pulses around her
+  // A double gold ring, like the Plate logo: a bold rim plus a thin inner line.
+  // When she's "talking", a soft gold glow pulses around her.
+  const gap = Math.max(2, Math.round(size / 20));
   return (
     <div className={talk ? (quick ? 'gitk-speak-quick' : 'gitk-speak') : undefined} style={{
       width: size, height: size, flexShrink: 0, borderRadius: size / 2, background: bg,
-      border: `${ring}px solid ${GOLD}`, overflow: 'hidden', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
+      border: `${Math.max(ring, Math.round(size / 22))}px solid ${GOLD}`, padding: gap,
+      boxSizing: 'border-box', display: 'flex',
     }}>
       <HostStyles />
-      <HostFace size={Math.round(size * 0.86)} talk={talk} quick={quick} />
+      <div style={{
+        flex: 1, borderRadius: '50%', overflow: 'hidden', background: bg,
+        boxShadow: '0 0 0 1px rgba(201,168,76,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <HostFace size={Math.round(size * 0.78)} talk={talk} quick={quick} />
+      </div>
     </div>
   );
 }

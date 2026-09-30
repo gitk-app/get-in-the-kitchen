@@ -149,7 +149,7 @@ export default function HomeScreen({ store, onNavigate }) {
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 2 }}>{getGreeting()}{firstName ? ', ' + firstName : ''}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 10 }}>{getDateLabel()}</div>
           </div>
-          <img src="/logo-icon.svg" alt="GET IN THE KITCHEN" style={{ width: 36, height: 36, borderRadius: 10 }} />
+          <img src="/logo-icon.svg" alt="Set the Table" style={{ width: 36, height: 36, borderRadius: 10 }} />
         </div>
 
         {/* The host's check-in */}
