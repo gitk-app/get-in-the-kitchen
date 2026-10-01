@@ -590,10 +590,13 @@ Return ONLY a JSON array, no other text:
   // ------------------------------------------------------------------------
   if (step === 0) {
     return (
-      <div className="gitk-onb" style={{
-        minHeight: '100vh', display: 'flex', justifyContent: 'center',
-        background: "linear-gradient(180deg, rgba(10,61,53,0.35) 0%, rgba(10,61,53,0.15) 55%, rgba(10,61,53,0.7) 100%), url('/bg-welcome.jpg') center bottom / cover no-repeat, #0A3D35",
-      }}>
+      <div className="gitk-onb stt-welcome-bg" style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center' }}>
+        <style>{`
+          .stt-welcome-bg { background: linear-gradient(180deg, rgba(10,61,53,0.35) 0%, rgba(10,61,53,0.15) 55%, rgba(10,61,53,0.7) 100%), url('/bg-welcome.jpg') center bottom / cover no-repeat, #0A3D35; }
+          @media (min-width: 768px) {
+            .stt-welcome-bg { background: linear-gradient(180deg, rgba(10,61,53,0.3) 0%, rgba(10,61,53,0.15) 55%, rgba(10,61,53,0.65) 100%), url('/bg-welcome-wide.jpg') center bottom / cover no-repeat, #0A3D35; }
+          }
+        `}</style>
         <AnimStyles />
         <div style={{ width: '100%', maxWidth: 480, minHeight: '100vh', padding: '24px 24px 32px', display: 'flex', flexDirection: 'column', gap: 24, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>

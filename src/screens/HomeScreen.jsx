@@ -142,9 +142,13 @@ export default function HomeScreen({ store, onNavigate }) {
   return (
     <div className="screen">
       {/* Teal hero with a food photo behind it. The teal fade keeps text easy to read. */}
-      <div style={{
-        background: "linear-gradient(180deg, rgba(10,61,53,0.55) 0%, rgba(10,61,53,0.35) 45%, rgba(10,61,53,0.82) 100%), url('/bg-home.jpg') center 30% / cover no-repeat, #0A3D35",
-      }}>
+      <style>{`
+        .stt-hero-bg { background: linear-gradient(180deg, rgba(10,61,53,0.55) 0%, rgba(10,61,53,0.35) 45%, rgba(10,61,53,0.82) 100%), url('/bg-home.jpg') center 30% / cover no-repeat, #0A3D35; }
+        @media (min-width: 768px) {
+          .stt-hero-bg { background: linear-gradient(180deg, rgba(10,61,53,0.5) 0%, rgba(10,61,53,0.3) 45%, rgba(10,61,53,0.8) 100%), url('/bg-home-wide.jpg') center / cover no-repeat, #0A3D35; }
+        }
+      `}</style>
+      <div className="stt-hero-bg">
         {/* Top bar */}
         <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
