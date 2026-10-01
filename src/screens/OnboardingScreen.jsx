@@ -590,7 +590,10 @@ Return ONLY a JSON array, no other text:
   // ------------------------------------------------------------------------
   if (step === 0) {
     return (
-      <div className="gitk-onb" style={{ minHeight: '100vh', background: C.teal, display: 'flex', justifyContent: 'center' }}>
+      <div className="gitk-onb" style={{
+        minHeight: '100vh', display: 'flex', justifyContent: 'center',
+        background: "linear-gradient(180deg, rgba(10,61,53,0.35) 0%, rgba(10,61,53,0.15) 55%, rgba(10,61,53,0.7) 100%), url('/bg-welcome.jpg') center bottom / cover no-repeat, #0A3D35",
+      }}>
         <AnimStyles />
         <div style={{ width: '100%', maxWidth: 480, minHeight: '100vh', padding: '24px 24px 32px', display: 'flex', flexDirection: 'column', gap: 24, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -608,7 +611,7 @@ Return ONLY a JSON array, no other text:
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
             {['Real meals', 'Real budget', 'Real life'].map(t => (
-              <div key={t} style={{ padding: '8px 12px', borderRadius: 16, background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 13, fontWeight: 600 }}>{t}</div>
+              <div key={t} style={{ padding: '8px 12px', borderRadius: 16, background: 'rgba(10,61,53,0.6)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', color: '#fff', fontSize: 13, fontWeight: 600 }}>{t}</div>
             ))}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -626,7 +629,7 @@ Return ONLY a JSON array, no other text:
           </div>
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
             <PrimaryButton gold onClick={next}>{firstName ? `Let's get cooking, ${firstName}` : "Let's get cooking"}</PrimaryButton>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Takes about 2 minutes</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>Takes about 2 minutes</div>
           </div>
         </div>
       </div>

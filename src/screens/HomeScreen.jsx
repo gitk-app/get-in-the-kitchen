@@ -141,8 +141,10 @@ export default function HomeScreen({ store, onNavigate }) {
 
   return (
     <div className="screen">
-      {/* ── TEAL HERO ── */}
-      <div style={{ background: '#0A3D35' }}>
+      {/* Teal hero with a food photo behind it. The teal fade keeps text easy to read. */}
+      <div style={{
+        background: "linear-gradient(180deg, rgba(10,61,53,0.55) 0%, rgba(10,61,53,0.35) 45%, rgba(10,61,53,0.82) 100%), url('/bg-home.jpg') center 30% / cover no-repeat, #0A3D35",
+      }}>
         {/* Top bar */}
         <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -195,7 +197,7 @@ export default function HomeScreen({ store, onNavigate }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
             {todayMeals.map(({ slot, meal }) => (
               <div key={slot} onClick={() => onNavigate('plan')}
-                style={{ background: meal?.batchCook ? 'rgba(201,168,76,0.12)' : 'rgba(255,255,255,0.08)', border: meal?.batchCook ? '1px solid rgba(201,168,76,0.4)' : 'none', borderRadius: 8, padding: '8px 6px', cursor: 'pointer' }}>
+                style={{ background: meal?.batchCook ? 'rgba(10,61,53,0.72)' : 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: meal?.batchCook ? '1px solid rgba(201,168,76,0.6)' : '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '8px 6px', cursor: 'pointer' }}>
                 <div style={{ fontSize: 7, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 5 }}>{slot}</div>
                 {meal?.image && (
                   <div style={{ height: 32, borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
