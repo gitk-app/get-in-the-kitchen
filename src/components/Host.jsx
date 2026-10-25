@@ -1,7 +1,7 @@
 import React from 'react';
 
 // ---------------------------------------------------------------------------
-// Set the Table - the host
+// Get Cooking with Nia - the host
 // She is the face of the app. Every screen uses these pieces, so swapping in
 // the final illustration later only means changing HostFace below.
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ function HostFace({ size, talk, quick }) {
 
 // Round avatar with a gold ring
 export function HostAvatar({ size = 48, ring = 2, bg = TEAL, talk = false, quick = false }) {
-  // A double gold ring, like the Plate logo: a bold rim plus a thin inner line.
+  // A double gold ring, like the logo: a bold rim plus a thin inner line.
   // When she's "talking", a soft gold glow pulses around her.
   const gap = Math.max(2, Math.round(size / 20));
   return (

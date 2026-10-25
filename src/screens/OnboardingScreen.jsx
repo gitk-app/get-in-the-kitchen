@@ -7,7 +7,7 @@ import {
 } from '../data/meals';
 
 // ---------------------------------------------------------------------------
-// Set the Table - Onboarding v2
+// Get Cooking with Nia - Onboarding v2.1
 // Welcome, 7 question steps, a "building your kitchen" moment, and a reveal.
 // The host's name and look live in components/Host.jsx.
 // ---------------------------------------------------------------------------
@@ -600,13 +600,13 @@ Return ONLY a JSON array, no other text:
         <AnimStyles />
         <div style={{ width: '100%', maxWidth: 480, minHeight: '100vh', padding: '24px 24px 32px', display: 'flex', flexDirection: 'column', gap: 24, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img src="/logo.svg" alt="Set the Table" style={{ height: 32, width: 'auto' }} />
+            <img src="/logo-wordmark.svg" alt="Get Cooking with Nia" style={{ height: 60, width: 'auto', display: 'block' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, paddingTop: 12 }}>
             <Avatar size={140} ring={5} bg={C.tealMid} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', textAlign: 'center' }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.gold }}>Hey, I'm {HOST_NAME}.</div>
-              <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, lineHeight: 1.15, color: '#fff' }}>Let's set the table.</h1>
+              <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, lineHeight: 1.15, color: '#fff' }}>Let's make mealtime easier.</h1>
               <p style={{ margin: 0, fontSize: 16, lineHeight: 1.55, color: 'rgba(255,255,255,0.82)' }}>
                 A few quick questions and I'll build a starter menu that fits your family, your budget, and your real life.
               </p>

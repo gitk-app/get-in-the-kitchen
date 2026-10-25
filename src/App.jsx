@@ -1,4 +1,4 @@
-// Set the Table - App v3.0 (renamed from GET IN THE KITCHEN)
+// Get Cooking with Nia - App v3.1 (formerly Set the Table and GET IN THE KITCHEN)
 import React, { useState } from 'react';
 import useStore from './hooks/useStore';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -45,7 +45,7 @@ export default function App() {
       {/* Desktop sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
-          <img src="/logo.svg" alt="Set the Table" style={{ height: 34, width: 'auto', maxWidth: '100%' }} />
+          <img src="/logo.svg" alt="Get Cooking with Nia" style={{ width: '100%', maxWidth: 190, height: 'auto', display: 'block' }} />
           <div className="sidebar-tagline">Real meals. Real budget. Real life.</div>
         </div>
         <nav className="sidebar-nav">

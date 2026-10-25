@@ -1,4 +1,4 @@
-// Set the Table - SettingsScreen v2.3 (reads shared lists from data/meals.js)
+// Get Cooking with Nia - SettingsScreen v2.4 (reads shared lists from data/meals.js)
 import React, { useState, useEffect } from 'react';
 import { Icon, Button, Divider, Pill } from '../components/UI';
 import {
@@ -279,7 +279,7 @@ export default function SettingsScreen({ store }) {
       <div style={{ background: '#0A3D35', padding: '20px 24px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <div>
-            <img src="/logo.svg" alt="Set the Table" style={{ height: 34, width: 'auto', display: 'block' }} />
+            <img src="/logo.svg" alt="Get Cooking with Nia" style={{ height: 64, width: 'auto', display: 'block' }} />
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>Real meals. Real budget. Real life.</div>
           </div>
         </div>
@@ -354,7 +354,7 @@ export default function SettingsScreen({ store }) {
         </div>
 
         <Divider />
-        <p className="text-xs text-muted" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Set the Table, beta<br />Real meals. Real budget. Real life.</p>
+        <p className="text-xs text-muted" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Get Cooking with Nia, beta<br />Real meals. Real budget. Real life.</p>
       </div>
 
       {/* ---------------- Edit sheets ---------------- */}
