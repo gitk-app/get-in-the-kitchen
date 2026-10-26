@@ -448,20 +448,21 @@ export default function OnboardingScreen({ store, onNavigate }) {
 
     const hasKey = localStorage.getItem('gitk_beta_code') || localStorage.getItem('gitk_api_key');
     if (hasKey) {
-      try {
-        const proteinStr = allowedProteins.length ? allowedProteins.join(', ') : 'a healthy mix of everyday proteins';
-        const allergyStr = allergies.length ? allergies.join(', ') : 'none';
-        const rulesStr = strictRules.length ? strictRules.join(', ') : 'none';
-        const goalsStr = healthGoals.length ? healthGoals.join(', ') : 'none';
-        const styleStr = mealTypes.length ? mealTypes.join(', ') : 'everyday American home cooking';
-        const storeStr = [...stores, 'Pantry / on hand'].join('|');
-        // Rough cost targets for the whole household, from her monthly budget
-        const perDay = budget / 4 / 7;
-        const costB = (perDay * 0.2).toFixed(2);
-        const costL = (perDay * 0.3).toFixed(2);
-        const costD = (perDay * 0.5).toFixed(2);
+      const proteinStr = allowedProteins.length ? allowedProteins.join(', ') : 'a healthy mix of everyday proteins';
+      const allergyStr = allergies.length ? allergies.join(', ') : 'none';
+      const rulesStr = strictRules.length ? strictRules.join(', ') : 'none';
+      const goalsStr = healthGoals.length ? healthGoals.join(', ') : 'none';
+      const styleStr = mealTypes.length ? mealTypes.join(', ') : 'everyday American home cooking';
+      const storeStr = [...stores, 'Pantry / on hand'].join('|');
+      // Rough cost targets for the whole household, from her monthly budget
+      const perDay = budget / 4 / 7;
+      const costB = (perDay * 0.25).toFixed(2);
+      const costL = (perDay * 0.3).toFixed(2);
+      const costD = (perDay * 0.45).toFixed(2);
 
-        const prompt = `Generate a personalized starter meal library for a new user of a budget meal planning app.
+      // Two smaller requests (mornings and dinners) run side by side. Smaller
+      // answers come back faster and are far less likely to get cut off.
+      const makePrompt = (countLine, extraRules) => `Generate part of a personalized starter meal library for a new user of a budget meal planning app.
 
 USER PROFILE:
 - Household size: ${household} people
@@ -477,10 +478,11 @@ HOUSE RULES (strict, never break): ${rulesStr}
 
 HEALTH GOALS (lean meals this way, not a hard rule): ${goalsStr}
 
-Generate exactly 15 meals: 4 breakfasts, 5 lunches, 6 dinners. No snacks.
-All meals must be simple, budget-friendly, practical home cooking.
+${countLine}
+All meals must be simple, budget-friendly, practical home cooking that this family would be excited to eat.
 ${allowedProteins.length ? 'Only use the proteins listed above.' : 'Use a variety of affordable proteins.'}
-Spread the meals across the meal styles they love. Do not repeat the same main dish, and use any one protein for no more than 2 of the 6 dinners.
+Let the meal styles they love shape every meal, including breakfast and lunch. Do not repeat a main dish.
+${extraRules}
 Scale ingredients for ${household} people and give an amount for every ingredient (like "2 cans" or "1 lb").
 Keep steps short: 3 to 4 steps. A full recipe is written later when they open the meal.
 
@@ -495,19 +497,39 @@ Return ONLY a JSON array, no other text:
   "steps": ["step 1", "step 2", "step 3"]
 }]`;
 
-        const raw = await apiFetch(prompt, 4000);
-        const parsed = parseMealsJson(raw);
-        if (parsed && parsed.length) {
-          meals = parsed.map((m, i) => ({
-            ...m,
-            id: 'starter_' + Date.now() + '_' + i,
-            favorite: false,
-            image: null,
-          }));
-          ai = true;
+      const morningPrompt = makePrompt(
+        'Generate exactly 9 meals: 4 breakfasts and 5 lunches. No snacks.',
+        'Make breakfasts and lunches real dishes with some personality, not the same basic defaults. Include at most ONE plain no-cook breakfast (like yogurt, fruit, or boiled eggs). Ideas of the variety wanted, only where they fit the food rules and styles: breakfast tacos, sweet potato hash, grits and eggs, breakfast sandwiches, baked oatmeal, savory rice bowls, loaded wraps, hearty soups, grain bowls.'
+      );
+      const dinnerPrompt = makePrompt(
+        'Generate exactly 6 dinners. No snacks.',
+        'Use any one protein for no more than 2 of the 6 dinners, and spread the dinners across the meal styles they love.'
+      );
+
+      // Asks once, and tries one more time if the answer fails or comes back unreadable
+      const askFor = async (p) => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const parsed = parseMealsJson(await apiFetch(p, 3000));
+            if (parsed && parsed.length) return parsed;
+          } catch (e) {
+            console.warn('Starter meals request failed, trying again:', e);
+          }
         }
-      } catch (e) {
-        console.warn('Starter library generation failed, using starter meals instead:', e);
+        return null;
+      };
+
+      const [morning, dinners] = await Promise.all([askFor(morningPrompt), askFor(dinnerPrompt)]);
+      const stamp = Date.now();
+      const tag = (list, prefix) => (list || []).map((m, i) => ({ ...m, id: `starter_${prefix}_${stamp}_${i}`, favorite: false, image: null }));
+      if (morning || dinners) {
+        ai = true;
+        // If only one half came back, fill the other half with safe starter meals
+        const backup = fallbackMeals();
+        meals = [
+          ...(morning ? tag(morning, 'am') : backup.filter(m => m.slot !== 'Dinner')),
+          ...(dinners ? tag(dinners, 'pm') : backup.filter(m => m.slot === 'Dinner')),
+        ];
       }
     }
 
@@ -599,7 +621,9 @@ Return ONLY a JSON array, no other text:
         <div style={{ position: 'relative', width: '100%', maxWidth: 480, padding: '32px 24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           <Host onDark text={usedAI
             ? `Here's what I made for you${firstName ? ', ' + firstName : ''}. I built these around your budget and your food rules.`
-            : "Here are some starter meals to get you going. Add your access code in Settings and I'll make them just for you."} />
+            : (localStorage.getItem('gitk_beta_code') || localStorage.getItem('gitk_api_key'))
+              ? "I had trouble making your custom meals just now, so I started you with some basics. When you build your first week, I'll plan meals around your choices."
+              : "Here are some starter meals to get you going. Add your access code in Settings and I'll make them just for you."} />
           <Heading
             light
             title="Your kitchen is ready."
