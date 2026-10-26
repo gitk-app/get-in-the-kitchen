@@ -675,13 +675,22 @@ Respond ONLY with JSON, no other text:
   const planItems = useMemo(() => {
     const plan = plans['week' + activeWeek] || {};
     const seen = {};
+    // Dishes cooked earlier in the week are leftovers, not groceries. Skip any
+    // ingredient that is really a leftover or another meal on this week's plan.
+    const plannedMealKeys = new Set();
+    DAYS.forEach(day => PLAN_SLOTS.forEach(slot => {
+      const m = meals.find(x => x.id === plan[day]?.[slot]);
+      if (m?.name) plannedMealKeys.add(itemKey(m.name));
+    }));
+    const isLeftover = (name) => /\bleft[\s-]?overs?\b|\bfrom (sun|mon|tue|wed|thu|fri|sat)[a-z]*\b|\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)'?s?\b.*\b(batch|dinner|cook)\b/i.test(name)
+      || plannedMealKeys.has(itemKey(name));
     DAYS.forEach(day => {
       PLAN_SLOTS.forEach(slot => {
         const meal = meals.find(m => m.id === plan[day]?.[slot]);
         if (!meal?.items) return;
         meal.items.forEach(it => {
           const name = String(it.n || '').trim();
-          if (!name) return;
+          if (!name || isLeftover(name)) return;
           const k = itemKey(name) || name.toLowerCase();
           if (!seen[k]) seen[k] = { key: k + '|plan', name, store: it.s || '', source: 'plan', qtys: [], mealNames: new Set() };
           if (!seen[k].store && it.s) seen[k].store = it.s;
