@@ -1,4 +1,4 @@
-// Get Cooking with Nia - PlanScreen v2.4 (pantry first, favorites vs new choice, flexible quick meals)
+// Get Cooking with Nia - PlanScreen v3.0 (Build My Week redesign: day pills, leftovers, eating out, clearer budget)
 import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { Host, HostAction, HostAvatar, HostToast, useHostToast } from '../components/Host';
@@ -102,6 +102,28 @@ function normalizeMealName(name) {
     .join(' ');
 }
 
+// A row of day buttons, Sunday to Saturday. Tap to turn a day on or off.
+function DayPills({ value, onChange }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 }}>
+      {DAYS.map(d => {
+        const on = value.includes(d);
+        return (
+          <button key={d} type="button" aria-pressed={on} aria-label={d}
+            onClick={() => onChange(on ? value.filter(x => x !== d) : [...value, d])}
+            style={{
+              minHeight: 44, borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: on ? 800 : 600,
+              border: on ? '2px solid var(--teal)' : '1px solid var(--border)', background: on ? 'var(--teal)' : 'var(--bg-white)',
+              color: on ? '#fff' : 'var(--text-secondary)', padding: 0,
+            }}>
+            {d.slice(0, 3)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function mealIsBlocked(meal, blockWords) {
   if (!blockWords.length) return false;
   const text = [meal.name || '', meal.protein || '', ...(meal.items || []).map(i => i.n || '')].join(' ').toLowerCase();
@@ -144,8 +166,12 @@ export default function PlanScreen({ store }) {
   const [wizard, setWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardProteins, setWizardProteins] = useState(() => prefs?.proteins || []);
-  const [wizardLeftovers, setWizardLeftovers] = useState('1-2');
-  const [wizardBusyNights, setWizardBusyNights] = useState('Tuesday, Wednesday, Thursday, Friday');
+  // Build My Week answers. The usual ones are remembered in prefs for next time.
+  const [busyDays, setBusyDays] = useState(() => prefs?.busyDays || ['Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+  const [cookTools, setCookTools] = useState(() => prefs?.cookTools || []);
+  const [likesLeftovers, setLikesLeftovers] = useState(() => prefs?.likesLeftovers ?? true);
+  const [leftoverDays, setLeftoverDays] = useState(() => prefs?.leftoverDays || ['Thursday']);
+  const [eatOutDays, setEatOutDays] = useState([]);
   const [wizardLocked, setWizardLocked] = useState('');
   // How much of the week's grocery budget to plan for (percent). Remembered for next time.
   const [budgetUse, setBudgetUse] = useState(() => prefs?.budgetUse || 80);
@@ -158,6 +184,7 @@ export default function PlanScreen({ store }) {
   const [confirmClear, setConfirmClear] = useState(false);
 
   const diet = getDietRules(prefs);
+  const weekHasMeals = Object.values(currentPlan || {}).some(d => d && Object.values(d).some(Boolean));
   const total = planTotal();
   const mTotal = monthlyTotal();
   const mBudget = prefs?.monthlyBudget || budget * 4;
@@ -282,8 +309,20 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"
         if (m && !otherWeekNames.includes(m.name)) otherWeekNames.push(m.name);
       }));
     });
-    const targetCost = Math.round(weeklyBudget * budgetUse / 100);
-    store.setPrefs(p => ({ ...p, budgetUse, libraryMix }));
+    // Eating-out nights: the budget stays the same, she just needs fewer meals,
+    // so the cost target covers only the meals being planned.
+    const plannedSlots = 21 - eatOutDays.length;
+    const targetCost = Math.round(weeklyBudget * budgetUse / 100 * plannedSlots / 21);
+    store.setPrefs(p => ({ ...p, budgetUse, libraryMix, busyDays, cookTools, likesLeftovers, leftoverDays }));
+    const inWeekOrder = (list) => DAYS.filter(d => list.includes(d));
+    const busyStr = busyDays.length ? inWeekOrder(busyDays).join(', ') : 'none this week';
+    const toolsStr = cookTools.length ? cookTools.join(', ') : 'none listed';
+    const leftoverStr = likesLeftovers
+      ? (leftoverDays.length ? `Leftover dinners on ${inWeekOrder(leftoverDays).join(', ')}. Leftovers from dinner can also cover next-day lunches.` : 'Leftovers are welcome where they fit, including next-day lunches.')
+      : 'This household does NOT like leftovers. Do not serve the same dish twice. A protein cooked in bulk may come back only as a clearly different meal (like roast chicken one night, chicken tacos another).';
+    const eatOutStr = eatOutDays.length
+      ? `They will eat out for dinner on ${inWeekOrder(eatOutDays).join(', ')}. Leave those dinners empty (use "name":"").`
+      : 'none';
     const libraryLine = {
       favorites: 'Use my saved library for about two thirds of the meals, favorites first, and create new meals for the rest. Reusing meals from my other weeks is fine.',
       mix: 'Use my saved library for about half the meals, especially favorites, and create new meals for the rest. Bring variety across weeks: use at most 5 meals from MEALS FROM MY OTHER WEEKS, and include at least 6 meals that are new to me.',
@@ -299,25 +338,27 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"
 HOUSEHOLD SIZE: ${householdSize} people
 PROTEINS SELECTED: ${proteins}
 MEAL STYLE PREFERENCES: ${mealTypeStr}
-BUSY NIGHTS (quick meals only, max 20 min): ${wizardBusyNights}
-LOCKED MEALS: ${wizardLocked || 'none'}
-LEFTOVERS NIGHTS: ${wizardLeftovers}
+BUSY NIGHTS (dinner 20 minutes or less, or leftovers): ${busyStr}
+COOKING HELPERS THEY HAVE (use on busy nights when it helps): ${toolsStr}
+ALREADY PLANNED (work these in as written): ${wizardLocked || 'none'}
+LEFTOVERS: ${leftoverStr}
+EATING OUT: ${eatOutStr}
 PANTRY ON HAND: ${pList.length ? pList.join(', ') : 'not specified'}
 MY SAVED MEALS: ${myMeals || 'none yet'}
 PANTRY FIRST: build meals around what is already in PANTRY ON HAND whenever it makes sense, so the grocery list stays short and nothing goes to waste.
-WEEKLY GROCERY TARGET: about $${targetCost} for all 21 meals (the full weekly budget is $${weeklyBudget}). Plan meals that add up close to this target, not far under it. With more room, choose heartier meals, more fresh produce, and better proteins. Keep names simple either way.
+WEEKLY GROCERY TARGET: about $${targetCost} for the ${plannedSlots} meals being planned (the full weekly budget is $${weeklyBudget}). Plan meals that add up close to this target, not far under it. With more room, choose heartier meals, more fresh produce, and better proteins. Keep names simple either way.
 MEALS FROM MY OTHER WEEKS: ${otherWeekNames.length ? otherWeekNames.join('; ') : 'none'}
 
 DIETARY RULES, STRICTLY REQUIRED, NEVER VIOLATE THESE:
 ${safetyBlock}
 ${safeProteins.length ? 'Only use proteins listed in PROTEINS SELECTED above.' : ''}
 
-BATCH COOKING RULES - this is the most important part:
-1. Sunday dinner = the BIG COOK. Pick ONE protein from PROTEINS SELECTED only and make a large batch. Set batchCook:true and batchProtein to the protein name.
-2. Monday and Tuesday meals should USE the Sunday batch in different forms. Set fromBatch:true and batchSource:"Sunday dinner".
-3. If a second protein is selected, Wednesday dinner = second small cook using that protein. Set batchCook:true.
-4. Thursday and Friday busy nights = leftovers OR quick meals under 20 minutes that fit MEAL STYLE PREFERENCES and the dietary rules. Set fromBatch:true if using leftovers.
-5. Saturday = flexible, slightly more effort if desired.
+COOK ONCE, EAT TWICE - this is the most important part:
+1. Pick one night that is NOT a busy night (Sunday if free) for the BIG COOK. Pick ONE protein from PROTEINS SELECTED and make a large batch. Set batchCook:true and batchProtein to the protein name.
+2. The next one or two days should USE that batch in different forms. Set fromBatch:true and batchSource to the big cook day and meal (like "Sunday dinner").
+3. If a second protein is selected, add a second smaller cook midweek on a night that is not busy. Set batchCook:true.
+4. Busy nights = leftovers (only if LEFTOVERS allows) OR quick meals under 20 minutes that fit MEAL STYLE PREFERENCES and the dietary rules. Set fromBatch:true if using leftovers.
+5. Follow LEFTOVERS and EATING OUT exactly.
 
 MEAL SIMPLICITY RULES:
 - Breakfast: quick, under 15 minutes.
@@ -335,6 +376,8 @@ Respond ONLY with this exact JSON structure, no other text:
     try {
       const text = await apiFetch(prompt, 2400);
       let weekPlan = parseJson(text);
+      // Eating-out dinners stay empty, whatever the AI sent back
+      eatOutDays.forEach(d => { if (weekPlan?.[d]?.Dinner) weekPlan[d].Dinner = { name: '' }; });
 
       // Adds up the AI's cost for every meal in a plan
       const planCost = (wp) => DAYS.reduce((sum, day) => sum + PLAN_SLOTS.reduce((s2, slot) => {
@@ -353,6 +396,8 @@ ${JSON.stringify(weekPlan)}
 
 Revise it so the week adds up close to $${targetCost}. Keep the same rules, batch cooking, and food safety rules. Upgrade meals rather than making them fancy: heartier dinners, more protein, fresh fruit and vegetable sides, fuller lunches. Keep simple names. Respond ONLY with the full JSON plan in the same format.`;
           const revised = parseJson(await apiFetch(revisePrompt, 2400));
+          // Keep eating-out dinners empty even in the revised plan
+          eatOutDays.forEach(d => { if (revised?.[d]?.Dinner) revised[d].Dinner = { name: '' }; });
           if (planCost(revised) > firstCost) weekPlan = revised;
         } catch (e) { /* keep the first plan */ }
       }
@@ -409,7 +454,8 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
         const planned = Object.values(newPlan).reduce((n, d) => n + Object.values(d || {}).filter(Boolean).length, 0);
         showToast(`Your week is ready${firstName ? ', ' + firstName : ''}! ${planned} meals planned`
           + (plannedCost > 0 ? ` for about $${Math.round(plannedCost)} of your $${targetCost} target` : '')
-          + (newMealRecords.length ? `, including ${newMealRecords.length} new ones. I'm writing their recipes now.` : '.'));
+          + (newMealRecords.length ? `, including ${newMealRecords.length} new ones. I'm writing their recipes now.` : '.')
+          + (eatOutDays.length ? ` Dinner is open on ${DAYS.filter(d => eatOutDays.includes(d)).map(d => d.slice(0, 3)).join(', ')} for eating out.` : ''));
       }
 
       // Generate steps in background for new meals
@@ -469,14 +515,6 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
       </div>
 
       <div className="screen-padded">
-        {/* Monthly summary */}
-        <div className="card-flat flex justify-between items-center mb-12" style={{ marginTop: 12 }}>
-          <span className="text-sm text-secondary">4-week estimate</span>
-          <span style={{ fontSize: 16, fontWeight: 700, color: mTotal > mBudget ? 'var(--danger)' : 'var(--text)' }}>
-            ${mTotal.toFixed(2)} <span className="text-xs text-muted" style={{ fontWeight: 400 }}>of ${mBudget.toFixed(2)}</span>
-          </span>
-        </div>
-
         {/* Banners */}
         {freshUrgent.length > 0 && (
           <Banner type="warning" icon="leaf">
@@ -489,36 +527,49 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
           </Banner>
         )}
 
-        {/* Budget */}
-        <div className="card mb-12">
-          <BudgetBar spent={total} budget={weeklyBudget} />
-        </div>
-
-        {/* Controls */}
-        <div className="flex gap-8 mb-12">
-          <Button variant="primary" onClick={() => { setWizard(true); setWizardStep(0); }} style={{ flex: 1 }}>
-            <Icon name="sparkles" size={16} /> Build my week
-          </Button>
-          {confirmClear ? (
-            <div className="flex gap-8 items-center">
-              <Button variant="danger" size="sm" onClick={() => { clearWeek(activeWeek); setConfirmClear(false); }}>Clear</Button>
-              <Button variant="ghost" size="sm" onClick={() => setConfirmClear(false)}>Cancel</Button>
-            </div>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}>
-              <Icon name="trash" size={14} />
-            </Button>
-          )}
-        </div>
-
-        {/* Host invite - shown when week is empty */}
-        {Object.keys(currentPlan).length === 0 && (
-          <div style={{ background: 'var(--teal-light)', border: '1px solid #9ED0BC', borderRadius: 16, padding: 16, marginBottom: 20 }}>
-            <Host text={`This week's a blank page${firstName ? ', ' + firstName : ''}. Want me to fill it in around your budget? Takes about 30 seconds.`}>
+        {!weekHasMeals ? (
+          /* Empty week: one clear next step */
+          <div style={{ background: 'var(--teal-light)', border: '1px solid #9ED0BC', borderRadius: 16, padding: 16, marginBottom: 20, marginTop: 12 }}>
+            <Host text={`Looks like you haven't started planning your meals for this week yet${firstName ? ', ' + firstName : ''}. I can help you build one around your budget. It takes about 30 seconds.`}>
               <HostAction onClick={() => setWizard(true)}>Build my week</HostAction>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>Or tap any + below to add meals yourself.</div>
             </Host>
           </div>
+        ) : (
+          <>
+            {/* What this week's meals cost: a result, not something to type in */}
+            <div className="card mb-12" style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>This week's meals cost about</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', margin: '4px 0 10px' }}>
+                <span style={{ fontSize: 26, fontWeight: 800, color: total > weeklyBudget ? 'var(--danger)' : 'var(--teal)' }}>${total.toFixed(2)}</span>
+                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>of your ${weeklyBudget} weekly grocery budget</span>
+              </div>
+              <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: Math.min(100, weeklyBudget ? (total / weeklyBudget) * 100 : 0) + '%', background: total > weeklyBudget ? 'var(--danger)' : '#C9A84C', borderRadius: 4 }} />
+              </div>
+              <div className="text-xs" style={{ marginTop: 8, color: 'var(--text-secondary)' }}>All 4 weeks: about ${mTotal.toFixed(0)} of your ${Number(mBudget).toFixed(0)} monthly budget</div>
+            </div>
+
+            <div className="flex gap-8 mb-12" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button variant="primary" onClick={() => { setWizard(true); setWizardStep(0); }} style={{ flex: 1 }}>
+                <Icon name="sparkles" size={16} /> Rebuild this week
+              </Button>
+              {!confirmClear && (
+                <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}>
+                  <Icon name="trash" size={14} /> Clear week
+                </Button>
+              )}
+            </div>
+            {confirmClear && (
+              <div role="alertdialog" aria-label="Clear this week" className="card mb-12" style={{ border: '1px solid var(--danger)' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Clear all meals from this week? Your saved meals stay in your library.</div>
+                <div className="flex gap-8">
+                  <Button variant="danger" size="sm" onClick={() => { clearWeek(activeWeek); setConfirmClear(false); }}>Yes, clear this week</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmClear(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Week grid */}
@@ -780,14 +831,14 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                 <HostAvatar size={96} ring={4} talk />
                 <h3 style={{ margin: 0 }}>Building your week...</h3>
                 <p style={{ margin: 0, maxWidth: 340 }}>
-                  I'm planning 7 days for about ${Math.round(weeklyBudget * budgetUse / 100)}, checking your pantry first, and mixing in new meals so nobody gets bored. About 30 seconds.
+                  I'm planning your week for about ${Math.round(weeklyBudget * budgetUse / 100 * (21 - eatOutDays.length) / 21)}, using what's in your pantry first. About 30 seconds.
                 </p>
               </div>
             ) : (
               <>
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>1. What proteins this week?</h3>
-                  <p className="text-sm mb-12">Select all that apply.</p>
+                  <h3 style={{ marginBottom: 4 }}>1. Choose your proteins</h3>
+                  <p className="text-sm mb-12">Protein is the main part of a meal, like chicken, beans, fish, or eggs. Pick what you'd like this week, or skip this and I'll use a healthy mix.</p>
                   {PROTEIN_OPTIONS.map(group => (
                     <div key={group.group} className="mb-12">
                       <SectionLabel>{group.group}</SectionLabel>
@@ -804,7 +855,7 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                     if (!extras.length) return null;
                     return (
                       <div className="mb-12">
-                        <SectionLabel>Your usual proteins</SectionLabel>
+                        <SectionLabel>Your own picks</SectionLabel>
                         <div className="pill-group">
                           {extras.map(p => (
                             <Pill key={p} selected={wizardProteins.includes(p)} onClick={() => toggleProtein(p)}>{p}</Pill>
@@ -815,68 +866,77 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                   })()}
                   {(diet.allergies.length > 0 || diet.rules.length > 0) && (
                     <p className="text-sm" style={{ marginTop: 4 }}>
-                      Leaving out {[...diet.allergies, ...diet.rules].join(', ').toLowerCase()} every time.
+                      Some proteins are hidden because of your food rules. You can change those in Settings.
                     </p>
                   )}
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>2. Which nights are you busy?</h3>
-                  <p className="text-sm mb-8">Those dinners will be 20 min or less, slow cooker, or leftovers.</p>
-                  <input
-                    value={wizardBusyNights}
-                    onChange={e => setWizardBusyNights(e.target.value)}
-                    placeholder="e.g. Tuesday, Wednesday, Thursday, Friday"
-                    style={{ marginBottom: 8 }}
-                  />
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {['Tuesday-Friday', 'Mon-Fri evenings', 'Weeknights', 'None this week'].map(opt => (
-                      <div key={opt} onClick={() => setWizardBusyNights(opt)}
-                        style={{ padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12, border: '1.5px solid ' + (wizardBusyNights === opt ? 'var(--green)' : 'var(--border)'), background: wizardBusyNights === opt ? 'var(--green-light)' : 'var(--bg-white)', color: wizardBusyNights === opt ? 'var(--green)' : 'var(--text-secondary)', fontWeight: wizardBusyNights === opt ? 700 : 400 }}>
-                        {opt}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="divider" />
-                <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>3. Leftover nights?</h3>
-                  <p className="text-sm mb-12">Dinner covers next day's lunch.</p>
+                  <h3 style={{ marginBottom: 4 }}>2. Which nights are busy?</h3>
+                  <p className="text-sm mb-12">Tap each busy night. Dinner on those nights will take 20 minutes or less, or use leftovers.</p>
+                  <DayPills value={busyDays} onChange={setBusyDays} />
+                  <p className="text-sm" style={{ margin: '14px 0 8px', fontWeight: 600, color: 'var(--text)' }}>Anything that helps on busy nights? (optional)</p>
                   <div className="pill-group">
-                    {[['0', 'None'], ['1-2', '1-2 nights'], ['3+', '3+ nights']].map(([val, label]) => (
-                      <Pill key={val} selected={wizardLeftovers === val} onClick={() => setWizardLeftovers(val)}>{label}</Pill>
+                    {['Slow cooker', 'Instant Pot', 'Air fryer', 'Sheet pan'].map(t => (
+                      <Pill key={t} selected={cookTools.includes(t)} onClick={() => setCookTools(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}>{t}</Pill>
                     ))}
                   </div>
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>4. Anything already locked in?</h3>
-                  <p className="text-sm mb-8">Optional - e.g. "Tuesday dinner is breakfast for dinner"</p>
+                  <h3 style={{ marginBottom: 4 }}>3. How do you feel about leftovers?</h3>
+                  <p className="text-sm mb-12">Some families love them, some don't. Either way works.</p>
+                  <div className="pill-group">
+                    <Pill selected={likesLeftovers} onClick={() => setLikesLeftovers(true)}>Leftovers are fine</Pill>
+                    <Pill selected={!likesLeftovers} onClick={() => setLikesLeftovers(false)}>No leftovers, please</Pill>
+                  </div>
+                  {likesLeftovers && (
+                    <>
+                      <p className="text-sm" style={{ margin: '14px 0 8px', fontWeight: 600, color: 'var(--text)' }}>Which nights should be leftover nights?</p>
+                      <DayPills value={leftoverDays} onChange={setLeftoverDays} />
+                    </>
+                  )}
+                </div>
+                <div className="divider" />
+                <div className="mb-16">
+                  <h3 style={{ marginBottom: 4 }}>4. Eating out any nights this week?</h3>
+                  <p className="text-sm mb-12">Practice, games, date night, or a drive-thru kind of day. Tap those nights and I'll plan fewer dinners. Your grocery budget stays the same.</p>
+                  <DayPills value={eatOutDays} onChange={setEatOutDays} />
+                </div>
+                <div className="divider" />
+                <div className="mb-16">
+                  <h3 style={{ marginBottom: 4 }}>5. Any meals already planned?</h3>
+                  <p className="text-sm mb-8">Optional. Meals you already know you're making, like "Taco Tuesday" or "Sunday dinner at my mom's." I'll plan around them.</p>
                   <textarea value={wizardLocked} onChange={e => setWizardLocked(e.target.value)}
-                    placeholder="Leave blank if nothing is set yet…"
+                    placeholder="Leave blank if nothing is planned yet"
                     style={{ height: 72, resize: 'none' }} />
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>5. How much of this week's budget should I plan for?</h3>
-                  <p className="text-sm mb-12">Spend less to save, or use more for heartier meals and more variety.</p>
+                  <h3 style={{ marginBottom: 4 }}>6. How much of your grocery budget should I use?</h3>
+                  <p className="text-sm mb-12">Slide left to spend less and save, or right for heartier meals and more variety.</p>
                   <div style={{ background: 'var(--teal-light)', borderRadius: 14, padding: '14px 16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--teal)' }}>${Math.round(weeklyBudget * budgetUse / 100)}</span>
-                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>of ${weeklyBudget} this week ({budgetUse}%)</span>
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>of your ${weeklyBudget} weekly grocery budget</span>
                     </div>
                     <label htmlFor="budget-use" style={{ position: 'absolute', left: -9999 }}>Share of weekly budget to plan for</label>
                     <input id="budget-use" type="range" min="50" max="100" step="5" value={budgetUse}
                       onChange={e => setBudgetUse(Number(e.target.value))}
                       style={{ width: '100%', padding: 0, border: 'none', background: 'transparent', accentColor: '#0A3D35' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>
-                      <span>Save more</span><span>Balanced</span><span>Use my full budget</span>
+                      <span>Save more</span><span>Balanced</span><span>Use it all</span>
                     </div>
+                    {eatOutDays.length > 0 && (
+                      <div className="text-sm" style={{ marginTop: 10, color: 'var(--teal)' }}>
+                        With {eatOutDays.length} night{eatOutDays.length !== 1 ? 's' : ''} out, I'll plan about ${Math.round(weeklyBudget * budgetUse / 100 * (21 - eatOutDays.length) / 21)} in groceries.
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="divider" />
                 <div className="mb-16">
-                  <h3 style={{ marginBottom: 4 }}>6. Favorites or new ideas?</h3>
+                  <h3 style={{ marginBottom: 4 }}>7. Favorites or new ideas?</h3>
                   <p className="text-sm mb-12">Choose how much of the week comes from meals you've already saved.</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
