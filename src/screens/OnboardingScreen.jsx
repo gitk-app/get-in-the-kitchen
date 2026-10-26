@@ -454,12 +454,18 @@ export default function OnboardingScreen({ store, onNavigate }) {
         const goalsStr = healthGoals.length ? healthGoals.join(', ') : 'none';
         const styleStr = mealTypes.length ? mealTypes.join(', ') : 'everyday American home cooking';
         const storeStr = [...stores, 'Pantry / on hand'].join('|');
+        // Rough cost targets for the whole household, from her monthly budget
+        const perDay = budget / 4 / 7;
+        const costB = (perDay * 0.2).toFixed(2);
+        const costL = (perDay * 0.3).toFixed(2);
+        const costD = (perDay * 0.5).toFixed(2);
 
         const prompt = `Generate a personalized starter meal library for a new user of a budget meal planning app.
 
 USER PROFILE:
 - Household size: ${household} people
 - Monthly grocery budget: $${budget}
+- Cost targets for the whole household: breakfast about $${costB}, lunch about $${costL}, dinner about $${costD}
 - Proteins they buy: ${proteinStr}
 - Meal styles they love: ${styleStr}
 
@@ -473,20 +479,22 @@ HEALTH GOALS (lean meals this way, not a hard rule): ${goalsStr}
 Generate exactly 15 meals: 4 breakfasts, 5 lunches, 6 dinners. No snacks.
 All meals must be simple, budget-friendly, practical home cooking.
 ${allowedProteins.length ? 'Only use the proteins listed above.' : 'Use a variety of affordable proteins.'}
-Scale ingredients for ${household} people.
+Spread the meals across the meal styles they love. Do not repeat the same main dish, and use any one protein for no more than 2 of the 6 dinners.
+Scale ingredients for ${household} people and give an amount for every ingredient (like "2 cans" or "1 lb").
+Keep steps short: 3 to 4 steps. A full recipe is written later when they open the meal.
 
 Return ONLY a JSON array, no other text:
 [{
   "name": "meal name",
   "slot": "Breakfast|Lunch|Dinner",
   "cost": 3.50,
-  "protein": "chicken|beef|pork|turkey|fish|eggs|sausage|dairy|pb|none",
+  "protein": "chicken|beef|pork|turkey|fish|eggs|sausage|dairy|pb|beans|lentils|tofu|chickpeas|none",
   "prepTime": 20,
-  "items": [{"n": "ingredient name", "s": "${storeStr}"}],
+  "items": [{"q": "amount", "n": "ingredient name", "s": "${storeStr}"}],
   "steps": ["step 1", "step 2", "step 3"]
 }]`;
 
-        const raw = await apiFetch(prompt, 3000);
+        const raw = await apiFetch(prompt, 4000);
         const parsed = parseMealsJson(raw);
         if (parsed && parsed.length) {
           meals = parsed.map((m, i) => ({

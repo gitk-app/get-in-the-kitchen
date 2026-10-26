@@ -1,4 +1,4 @@
-// Get Cooking with Nia - PlanScreen v2.3 (photo banner)
+// Get Cooking with Nia - PlanScreen v2.4 (pantry first, favorites vs new choice, flexible quick meals)
 import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { Host, HostAction, HostAvatar, HostToast, useHostToast } from '../components/Host';
@@ -149,6 +149,8 @@ export default function PlanScreen({ store }) {
   const [wizardLocked, setWizardLocked] = useState('');
   // How much of the week's grocery budget to plan for (percent). Remembered for next time.
   const [budgetUse, setBudgetUse] = useState(() => prefs?.budgetUse || 80);
+  // How much of the week comes from her saved meals: favorites, mix, or new
+  const [libraryMix, setLibraryMix] = useState(() => prefs?.libraryMix || 'mix');
   const [building, setBuilding] = useState(false);
   const [toast, showToast, hideToast] = useHostToast(9000);
   const firstName = String(prefs?.userName || '').trim().split(/\s+/)[0] || '';
@@ -281,13 +283,18 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"
       }));
     });
     const targetCost = Math.round(weeklyBudget * budgetUse / 100);
-    store.setPrefs(p => ({ ...p, budgetUse }));
+    store.setPrefs(p => ({ ...p, budgetUse, libraryMix }));
+    const libraryLine = {
+      favorites: 'Use my saved library for about two thirds of the meals, favorites first, and create new meals for the rest. Reusing meals from my other weeks is fine.',
+      mix: 'Use my saved library for about half the meals, especially favorites, and create new meals for the rest. Bring variety across weeks: use at most 5 meals from MEALS FROM MY OTHER WEEKS, and include at least 6 meals that are new to me.',
+      newideas: 'Use my saved library for only about a quarter of the meals, and create new meals for the rest. Bring lots of variety: use at most 3 meals from MEALS FROM MY OTHER WEEKS.',
+    }[libraryMix] || '';
     const safetyBlock = [
       diet.guard,
       skipProteins.length ? `PROTEINS NOT PICKED THIS WEEK (do not use): ${skipProteins.join(', ')}.` : '',
     ].filter(Boolean).join('\n') || 'No restrictions given.';
 
-    const prompt = `You are meal planning for a busy working mom who batch cooks. Build a smart 7-day plan where meals connect to each other.
+    const prompt = `You are meal planning for a busy household that likes to cook once and eat twice. Build a smart 7-day plan where meals connect to each other.
 
 HOUSEHOLD SIZE: ${householdSize} people
 PROTEINS SELECTED: ${proteins}
@@ -297,6 +304,7 @@ LOCKED MEALS: ${wizardLocked || 'none'}
 LEFTOVERS NIGHTS: ${wizardLeftovers}
 PANTRY ON HAND: ${pList.length ? pList.join(', ') : 'not specified'}
 MY SAVED MEALS: ${myMeals || 'none yet'}
+PANTRY FIRST: build meals around what is already in PANTRY ON HAND whenever it makes sense, so the grocery list stays short and nothing goes to waste.
 WEEKLY GROCERY TARGET: about $${targetCost} for all 21 meals (the full weekly budget is $${weeklyBudget}). Plan meals that add up close to this target, not far under it. With more room, choose heartier meals, more fresh produce, and better proteins. Keep names simple either way.
 MEALS FROM MY OTHER WEEKS: ${otherWeekNames.length ? otherWeekNames.join('; ') : 'none'}
 
@@ -308,16 +316,17 @@ BATCH COOKING RULES - this is the most important part:
 1. Sunday dinner = the BIG COOK. Pick ONE protein from PROTEINS SELECTED only and make a large batch. Set batchCook:true and batchProtein to the protein name.
 2. Monday and Tuesday meals should USE the Sunday batch in different forms. Set fromBatch:true and batchSource:"Sunday dinner".
 3. If a second protein is selected, Wednesday dinner = second small cook using that protein. Set batchCook:true.
-4. Thursday and Friday busy nights = leftovers OR ultra-quick meals (quesadillas, eggs, grilled cheese). Set fromBatch:true if using leftovers.
+4. Thursday and Friday busy nights = leftovers OR quick meals under 20 minutes that fit MEAL STYLE PREFERENCES and the dietary rules. Set fromBatch:true if using leftovers.
 5. Saturday = flexible, slightly more effort if desired.
 
 MEAL SIMPLICITY RULES:
-- Breakfast: eggs, oatmeal, yogurt, toast. Fast. Under 15 min.
-- Lunch: leftovers, wrap, sandwich, salad. Under 10 min.
-- Dinner on busy nights: leftovers, quesadillas, eggs, grilled cheese ONLY.
+- Breakfast: quick, under 15 minutes.
+- Lunch: quick, under 10 minutes, like leftovers, wraps, salads, or bowls.
+- Dinner on busy nights: leftovers or quick meals under 20 minutes.
+- Pick quick dishes that fit MEAL STYLE PREFERENCES and the dietary rules, not the same few defaults every week.
 - NO gourmet meals. Simple plain names only. "Baked chicken thighs" not "herb-crusted chicken".
-- Batch leftovers within this week are great. But bring VARIETY across weeks: use at most 5 meals from MEALS FROM MY OTHER WEEKS, and include at least 6 meals that are new to me.
-- Use my saved library for about half the meals, especially favorites, and create new meals for the rest.
+- Batch leftovers within this week are great.
+- ${libraryLine}
 - Scale all meals for ${householdSize} people.
 
 When you use one of MY SAVED MEALS, copy its name exactly as written. When the same meal appears on more than one day (like leftovers), use the exact same name each time. Set isNew:true for meals not in my saved library. Give every meal an estimated cost in US dollars for the whole household.
@@ -863,6 +872,33 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>
                       <span>Save more</span><span>Balanced</span><span>Use my full budget</span>
                     </div>
+                  </div>
+                </div>
+                <div className="divider" />
+                <div className="mb-16">
+                  <h3 style={{ marginBottom: 4 }}>6. Favorites or new ideas?</h3>
+                  <p className="text-sm mb-12">Choose how much of the week comes from meals you've already saved.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { v: 'favorites', l: 'Mostly my favorites', d: 'Meals you already know and like' },
+                      { v: 'mix', l: 'A mix', d: 'About half favorites, half new' },
+                      { v: 'newideas', l: 'Mostly new ideas', d: 'Fresh meals to try this week' },
+                    ].map(o => {
+                      const sel = libraryMix === o.v;
+                      return (
+                        <button key={o.v} type="button" aria-pressed={sel} onClick={() => setLibraryMix(o.v)} style={{
+                          textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
+                          border: sel ? '2px solid var(--teal)' : '1px solid var(--border)', background: sel ? 'var(--teal-light)' : 'var(--bg-white)',
+                          display: 'flex', alignItems: 'center', gap: 10,
+                        }}>
+                          <Icon name={sel ? 'circle-check' : 'circle'} size={20} style={{ color: sel ? 'var(--teal)' : 'var(--text-muted)', flexShrink: 0 }} />
+                          <span>
+                            <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{o.l}</span>
+                            <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)' }}>{o.d}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <Button variant="primary" onClick={buildWeek}>
