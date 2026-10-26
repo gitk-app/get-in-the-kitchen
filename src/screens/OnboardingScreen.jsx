@@ -7,7 +7,7 @@ import {
 } from '../data/meals';
 
 // ---------------------------------------------------------------------------
-// Get Cooking with Nia - Onboarding v2.1
+// Get Cooking with Nia - Onboarding v2.2 (full-screen food photos)
 // Welcome, 7 question steps, a "building your kitchen" moment, and a reveal.
 // The host's name and look live in components/Host.jsx.
 // ---------------------------------------------------------------------------
@@ -109,12 +109,36 @@ function AnimStyles() {
   );
 }
 
-function Heading({ title, sub }) {
+function Heading({ title, sub, light = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.2, color: C.text }}>{title}</h1>
-      {sub && <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: C.sec }}>{sub}</p>}
+      <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.2, color: light ? '#fff' : C.text }}>{title}</h1>
+      {sub && <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: light ? 'rgba(255,255,255,0.85)' : C.sec }}>{sub}</p>}
     </div>
+  );
+}
+
+// Food photo behind each onboarding step. Files live in public/.
+const STEP_PHOTOS = {
+  1: 'bg-onb-table.jpg',
+  2: 'bg-onb-table.jpg',
+  3: 'bg-grocery.jpg',
+  4: 'bg-onb-ingredients.jpg',
+  5: 'bg-onb-ingredients.jpg',
+  6: 'bg-onb-cooking.jpg',
+  7: 'bg-onb-cooking.jpg',
+};
+
+// A full-screen photo that stays put while the page scrolls, with a teal wash so text reads clearly
+function PhotoLayer({ file, strong = false }) {
+  const top = strong ? 0.78 : 0.55;
+  const mid = strong ? 0.82 : 0.68;
+  const bottom = strong ? 0.9 : 0.85;
+  return (
+    <div aria-hidden="true" style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, zIndex: 0, pointerEvents: 'none',
+      background: `linear-gradient(180deg, rgba(10,61,53,${top}) 0%, rgba(10,61,53,${mid}) 50%, rgba(10,61,53,${bottom}) 100%), url('/${file}') center / cover no-repeat, ${C.teal}`,
+    }} />
   );
 }
 
@@ -490,7 +514,8 @@ Return ONLY a JSON array, no other text:
     return (
       <div className="gitk-onb" style={{ minHeight: '100vh', background: C.teal, display: 'flex', justifyContent: 'center' }}>
         <AnimStyles />
-        <div style={{ width: '100%', maxWidth: 480, padding: '70px 24px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <PhotoLayer file="bg-onb-cooking.jpg" strong />
+        <div style={{ position: 'relative', width: '100%', maxWidth: 480, padding: '70px 24px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
             <Avatar size={140} ring={5} bg={C.tealMid} />
             <div style={{ textAlign: 'center' }}>
@@ -500,7 +525,7 @@ Return ONLY a JSON array, no other text:
               </p>
             </div>
           </div>
-          <div role="status" aria-live="polite" style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 18, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div role="status" aria-live="polite" style={{ background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 18, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {lines.map((line, i) => {
               const done = i < buildTick;
               const now = i === buildTick;
@@ -536,13 +561,15 @@ Return ONLY a JSON array, no other text:
     const preview = starterMeals.slice(0, 3);
     const more = Math.max(0, starterMeals.length - preview.length);
     return (
-      <div className="gitk-onb" style={{ minHeight: '100vh', background: C.cream, display: 'flex', justifyContent: 'center' }}>
+      <div className="gitk-onb" style={{ minHeight: '100vh', background: C.teal, display: 'flex', justifyContent: 'center' }}>
         <AnimStyles />
-        <div style={{ width: '100%', maxWidth: 480, padding: '32px 24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <Host text={usedAI
+        <PhotoLayer file="bg-onb-table.jpg" />
+        <div style={{ position: 'relative', width: '100%', maxWidth: 480, padding: '32px 24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Host onDark text={usedAI
             ? `Here's what I made for you${firstName ? ', ' + firstName : ''}. Every one fits your budget and your house rules.`
             : "Here are some starter meals to get you going. Add your access code in Settings and I'll make them just for you."} />
           <Heading
+            light
             title="Your kitchen is ready."
             sub={starterMeals.length ? `${starterMeals.length} meals picked for your family.` : 'Your library is ready for your first meals.'}
           />
@@ -570,15 +597,15 @@ Return ONLY a JSON array, no other text:
                 </div>
               ))}
               {more > 0 && (
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.sec, textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.85)', textAlign: 'center' }}>
                   Plus {more} more waiting in your library
                 </div>
               )}
             </div>
           )}
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 8 }}>
-            <PrimaryButton onClick={() => complete(true)}>Build my first week</PrimaryButton>
-            <TextButton onClick={() => complete(false)}>Look around first</TextButton>
+            <PrimaryButton gold onClick={() => complete(true)}>Build my first week</PrimaryButton>
+            <TextButton light onClick={() => complete(false)}>Look around first</TextButton>
           </div>
         </div>
       </div>
@@ -948,14 +975,16 @@ Return ONLY a JSON array, no other text:
   }
 
   return (
-    <div className="gitk-onb" style={{ minHeight: '100vh', background: C.cream, display: 'flex', justifyContent: 'center' }}>
+    <div className="gitk-onb" style={{ minHeight: '100vh', background: C.teal, display: 'flex', justifyContent: 'center' }}>
       <AnimStyles />
-      <div style={{ width: '100%', maxWidth: 480, minHeight: '100vh', padding: '20px 24px 0', display: 'flex', flexDirection: 'column', gap: 20, boxSizing: 'border-box' }}>
+      <PhotoLayer file={STEP_PHOTOS[step] || 'bg-onb-table.jpg'} />
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, minHeight: '100vh', padding: '20px 24px 0', display: 'flex', flexDirection: 'column', gap: 20, boxSizing: 'border-box' }}>
         {/* Top bar: back + progress */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button type="button" onClick={back} aria-label="Back" style={{
-            width: 44, height: 44, flexShrink: 0, borderRadius: 22, border: 'none', background: C.surface,
-            color: C.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            width: 44, height: 44, flexShrink: 0, borderRadius: 22, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(10,61,53,0.6)',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           }}>
             <i className="ti ti-arrow-left" style={{ fontSize: 20 }} />
           </button>
@@ -964,29 +993,35 @@ Return ONLY a JSON array, no other text:
               {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
                 <div key={i} style={{
                   flex: 1, height: 5, borderRadius: 3, transition: 'background .3s',
-                  background: i < step - 1 ? C.teal : i === step - 1 ? C.gold : C.border,
+                  background: i < step - 1 ? '#fff' : i === step - 1 ? C.gold : 'rgba(255,255,255,0.25)',
                 }} />
               ))}
             </div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.sec }}>Step {step} of {TOTAL_STEPS}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>Step {step} of {TOTAL_STEPS}</div>
           </div>
         </div>
 
         {/* key={step} restarts the talking animation on every new question */}
-        <Host key={step} text={host} />
-        <Heading title={title} sub={sub} />
+        <Host key={step} onDark text={host} />
+        <Heading light title={title} sub={sub} />
 
-        <div style={{ flex: 1 }}>{body}</div>
-
-        {/* Sticky bottom actions */}
+        {/* The answers sit on a cream panel so every option stays easy to read */}
         <div style={{
-          position: 'sticky', bottom: 0, background: C.cream, padding: '12px 0 28px',
-          display: 'flex', flexDirection: 'column', gap: 4,
+          flex: 1, display: 'flex', flexDirection: 'column', margin: '0 -24px', padding: '22px 24px 0',
+          background: C.cream, borderRadius: '24px 24px 0 0', boxShadow: '0 -8px 24px rgba(0,0,0,0.18)',
         }}>
-          {isLast
-            ? <PrimaryButton onClick={() => finish(false)} disabled={checkingCode}>{checkingCode ? 'Checking...' : 'Build my kitchen'}</PrimaryButton>
-            : <PrimaryButton onClick={next}>Continue</PrimaryButton>}
-          {skip && <TextButton onClick={isLast ? () => finish(true) : next}>{skip}</TextButton>}
+          <div style={{ flex: 1 }}>{body}</div>
+
+          {/* Sticky bottom actions */}
+          <div style={{
+            position: 'sticky', bottom: 0, background: C.cream, padding: '12px 0 28px',
+            display: 'flex', flexDirection: 'column', gap: 4,
+          }}>
+            {isLast
+              ? <PrimaryButton onClick={() => finish(false)} disabled={checkingCode}>{checkingCode ? 'Checking...' : 'Build my kitchen'}</PrimaryButton>
+              : <PrimaryButton onClick={next}>Continue</PrimaryButton>}
+            {skip && <TextButton onClick={isLast ? () => finish(true) : next}>{skip}</TextButton>}
+          </div>
         </div>
       </div>
     </div>

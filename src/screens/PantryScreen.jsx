@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN - PantryScreen v2.2 - Snap My Fridge - build:20260913
+// Get Cooking with Nia - PantryScreen v2.3 (full-screen photo)
 import React, { useState, lazy, Suspense, useRef } from 'react';
 import { Icon, Button, Banner } from '../components/UI';
 import { PANTRY_CATEGORIES } from '../data/meals';
@@ -539,9 +539,19 @@ export default function PantryScreen({ store }) {
         </>
       )}
 
-      <div className="screen-header">
-        <span className="screen-title">Pantry</span>
-        <span className="text-sm text-muted">{pantry.length} items</span>
+      <style>{`
+        .stt-pantry-full { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(10,61,53,0.6) 0%, rgba(10,61,53,0.72) 45%, rgba(10,61,53,0.8) 100%), url('/bg-pantry.jpg') center bottom / cover no-repeat, #0A3D35; }
+        @media (min-width: 768px) { .stt-pantry-full { left: var(--sidebar-width, 240px); background: linear-gradient(90deg, rgba(10,61,53,0.85) 0%, rgba(10,61,53,0.72) 55%, rgba(10,61,53,0.5) 100%), url('/bg-pantry-wide.jpg') right center / cover no-repeat, #0A3D35; } }
+      `}</style>
+      {/* Full-screen photo behind everything */}
+      <div className="stt-pantry-full" aria-hidden="true" />
+      <div style={{ position: 'relative' }}>
+      <div style={{ padding: '22px 24px 4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>PANTRY</div>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>What's in your kitchen</h1>
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#0A3D35', background: '#C9A84C', borderRadius: 14, padding: '4px 12px', whiteSpace: 'nowrap' }}>{pantry.length} items</span>
       </div>
 
       <div className="screen-padded">
@@ -561,7 +571,7 @@ export default function PantryScreen({ store }) {
 
           {/* Snap pantry/fridge hint */}
           <div style={{ background: 'var(--teal-light)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--teal)' }}>
-            📸 <strong>New!</strong> Snap your fridge or pantry - AI detects all your ingredients at once
+            <Icon name="camera" size={14} /> <strong>Tip:</strong> snap your fridge or pantry and I'll add everything I see at once
           </div>
 
           {scanFeedback && (
@@ -665,7 +675,7 @@ export default function PantryScreen({ store }) {
                 <div style={{ width: 30, height: 30, borderRadius: 9, background: t.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Icon name={t.icon} size={16} />
                 </div>
-                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text)' }}>{cat}</h2>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#fff' }}>{cat}</h2>
                 <span style={{ fontSize: 12, fontWeight: 700, color: t.text, background: t.bg, border: `1px solid ${t.border}`, borderRadius: 12, padding: '2px 10px' }}>
                   {items.length} item{items.length !== 1 ? 's' : ''}
                 </span>
@@ -696,6 +706,7 @@ export default function PantryScreen({ store }) {
             </section>
           );
         })}
+      </div>
       </div>
 
       {usedUpPrompt && (

@@ -276,13 +276,13 @@ export default function SettingsScreen({ store }) {
   return (
     <div className="screen">
       <style>{`
-        .stt-settings-bg { background: linear-gradient(180deg, rgba(10,61,53,0.7) 0%, rgba(10,61,53,0.5) 50%, rgba(10,61,53,0.88) 100%), url('/bg-settings.jpg') center bottom / cover no-repeat, #0A3D35; }
-        @media (min-width: 768px) {
-          .stt-settings-bg { background: linear-gradient(90deg, rgba(10,61,53,0.45) 0%, rgba(10,61,53,0.7) 45%, rgba(10,61,53,0.9) 100%), url('/bg-settings-wide.jpg') left center / cover no-repeat, #0A3D35; }
-        }
+        .stt-settings-full { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(10,61,53,0.6) 0%, rgba(10,61,53,0.72) 45%, rgba(10,61,53,0.8) 100%), url('/bg-settings.jpg') center bottom / cover no-repeat, #0A3D35; }
+        @media (min-width: 768px) { .stt-settings-full { left: var(--sidebar-width, 240px); background: linear-gradient(90deg, rgba(10,61,53,0.85) 0%, rgba(10,61,53,0.72) 55%, rgba(10,61,53,0.5) 100%), url('/bg-settings-wide.jpg') left center / cover no-repeat, #0A3D35; } }
       `}</style>
-      {/* Photo hero header */}
-      <div className="stt-settings-bg" style={{ padding: '20px 24px 24px' }}>
+      {/* Full-screen photo behind everything */}
+      <div className="stt-settings-full" aria-hidden="true" />
+      <div style={{ position: 'relative' }}>
+      <div style={{ padding: '20px 24px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <div>
             <img src="/logo.svg" alt="Get Cooking with Nia" style={{ height: 64, width: 'auto', display: 'block' }} />
@@ -310,7 +310,7 @@ export default function SettingsScreen({ store }) {
 
       <div className="screen-padded">
         {/* Preferences */}
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, marginTop: 4 }}>My preferences</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.04em', marginBottom: 10, marginTop: 4 }}>My preferences</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
           {prefRows.map(row => (
             <button key={row.key} type="button" onClick={() => { if (row.key === 'name') setNameDraft(prefs?.userName || ''); setEditSheet(row.key); }}
@@ -323,7 +323,7 @@ export default function SettingsScreen({ store }) {
         </div>
 
         {/* Tester access */}
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>Smart features</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.04em', marginBottom: 10 }}>Smart features</div>
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Tester code</div>
           <p className="text-sm mb-12">Turns on Build My Week, recipes, fridge scanning, and food photos.</p>
@@ -359,8 +359,8 @@ export default function SettingsScreen({ store }) {
           )}
         </div>
 
-        <Divider />
-        <p className="text-xs text-muted" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Get Cooking with Nia, beta<br />Real meals. Real budget. Real life.</p>
+        <p className="text-xs" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.75)', marginTop: 24 }}>Get Cooking with Nia, beta<br />Real meals. Real budget. Real life.</p>
+      </div>
       </div>
 
       {/* ---------------- Edit sheets ---------------- */}
