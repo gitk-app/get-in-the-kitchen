@@ -402,7 +402,7 @@ export default function SettingsScreen({ store }) {
               {customAllergies.map(a => <RemovableChip key={a} label={a} allergy onRemove={() => toggleAllergy(a)} />)}
             </div>
             <AddRow placeholder="Add another allergy" onAdd={addAllergy} />
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>I will never put these in a plan. Still check labels, just to be safe.</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>I'll leave these out of your meal plans. Please still check food labels, since products can change.</div>
           </RuleCard>
 
           <RuleCard title="How does your house eat?" sub="Beliefs, lifestyle, or foods you just skip.">
@@ -501,7 +501,7 @@ export default function SettingsScreen({ store }) {
 
       {editSheet === 'proteins' && (
         <EditSheet title="What proteins do you buy?" onClose={() => setEditSheet(null)}>
-          <p className="text-sm mb-16">Build My Week rotates these so dinner never gets boring.</p>
+          <p className="text-sm mb-16">Build My Week rotates these to keep dinner interesting.</p>
           {PROTEIN_GROUPS.map(group => (
             <div key={group.group} style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>{group.group}</div>

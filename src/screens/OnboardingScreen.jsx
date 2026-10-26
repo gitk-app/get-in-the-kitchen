@@ -7,7 +7,7 @@ import {
 } from '../data/meals';
 
 // ---------------------------------------------------------------------------
-// Get Cooking with Nia - Onboarding v2.2 (full-screen food photos)
+// Get Cooking with Nia - Onboarding v2.3 (tester feedback: wording, stores, select all, start over)
 // Welcome, 7 question steps, a "building your kitchen" moment, and a reveal.
 // The host's name and look live in components/Host.jsx.
 // ---------------------------------------------------------------------------
@@ -292,9 +292,11 @@ export default function OnboardingScreen({ store, onNavigate }) {
   const [household, setHousehold] = useState(draft.household || '3-4');
   const [monthlyBudget, setMonthlyBudget] = useState(draft.monthlyBudget || '450');
   const [shopFreq, setShopFreq] = useState(draft.shopFreq || 'biweekly');
-  const [stores, setStores] = useState(draft.stores || ['Walmart', 'Aldi']);
+  const [stores, setStores] = useState(draft.stores || []);
   // The stores showing on her list. She can remove any of them.
-  const [storeList, setStoreList] = useState(draft.storeList || [...STORES]);
+  const [storeList, setStoreList] = useState(draft.storeList || [...STORES].sort((a, b) => a.localeCompare(b)));
+  // True when she left partway through and came back to saved answers
+  const [resumed, setResumed] = useState((draft.step || 0) > 0);
   const [hasAllergies, setHasAllergies] = useState(draft.hasAllergies ?? null);
   const [allergies, setAllergies] = useState(draft.allergies || []);
   const [houseRules, setHouseRules] = useState(draft.houseRules || []);
@@ -356,6 +358,25 @@ export default function OnboardingScreen({ store, onNavigate }) {
   };
 
   const addUnique = (setter) => (val) => setter(prev => prev.some(x => x.toLowerCase() === val.toLowerCase()) ? prev : [...prev, val]);
+
+  // Clears saved answers and starts the questions fresh
+  const startOver = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
+    setUserName('');
+    setHousehold('3-4');
+    setMonthlyBudget('450');
+    setShopFreq('biweekly');
+    setStores([]);
+    setStoreList([...STORES].sort((a, b) => a.localeCompare(b)));
+    setHasAllergies(null);
+    setAllergies([]);
+    setHouseRules([]);
+    setHealthGoals([]);
+    setProteins([]);
+    setMealTypes([]);
+    setResumed(false);
+    setStep(0);
+  };
 
   // ----- Fallback when the AI is not available -----
   const fallbackMeals = () => {
@@ -506,9 +527,11 @@ Return ONLY a JSON array, no other text:
     const lines = [
       `Sizing meals for ${householdLabel} ${household === '1' ? 'person' : 'people'}`,
       `Keeping it under $${mb || 450} a month`,
-      allergies.length || strictRules.length
-        ? `Leaving out ${[...allergies, ...strictRules].slice(0, 3).join(', ').toLowerCase()}`
-        : 'Checking your food rules',
+      allergies.length
+        ? `Leaving out ${allergies.slice(0, 2).join(' and ').toLowerCase()}`
+        : strictRules.length
+          ? `Following your food rules: ${strictRules.slice(0, 2).join(', ').toLowerCase()}`
+          : 'Checking your food rules',
       mealTypes.length ? `Picking ${mealTypes.slice(0, 2).join(' and ').toLowerCase()} and more` : 'Picking meals your crew will love',
     ];
     return (
@@ -566,7 +589,7 @@ Return ONLY a JSON array, no other text:
         <PhotoLayer file="bg-onb-table.jpg" />
         <div style={{ position: 'relative', width: '100%', maxWidth: 480, padding: '32px 24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           <Host onDark text={usedAI
-            ? `Here's what I made for you${firstName ? ', ' + firstName : ''}. Every one fits your budget and your house rules.`
+            ? `Here's what I made for you${firstName ? ', ' + firstName : ''}. I built these around your budget and your food rules.`
             : "Here are some starter meals to get you going. Add your access code in Settings and I'll make them just for you."} />
           <Heading
             light
@@ -774,11 +797,11 @@ Return ONLY a JSON array, no other text:
     const suggestions = [...STORE_SUGGESTIONS, ...STORES].filter(s => !storeList.includes(s));
     host = "I'll sort your list by store so you're in and out, not wandering the aisles.";
     title = 'Where do you shop?';
-    sub = "Check the ones you use. Remove any you'll never go to, and add your local spots.";
+    sub = 'Tap each store you use. Tap the X to remove the ones you skip, and add your local favorites below.';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {storeList.map(s => {
+          {[...storeList].sort((a, b) => a.localeCompare(b)).map(s => {
             const on = stores.includes(s);
             return (
               <div key={s} style={{ minHeight: 56, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -811,7 +834,7 @@ Return ONLY a JSON array, no other text:
     const customAllergies = allergies.filter(a => !ALLERGENS.includes(a));
     const customRules = houseRules.filter(r => !HOUSE_RULES.includes(r));
     const customGoals = healthGoals.filter(g => !HEALTH_GOALS.includes(g));
-    host = "Tell me what's off the table once. I'll never put the wrong thing on your plate.";
+    host = "Tell me what's off the table once, and I'll plan around it.";
     title = 'Anything off the table?';
     sub = "Three quick ones. Skip whatever doesn't apply.";
     body = (
@@ -843,7 +866,7 @@ Return ONLY a JSON array, no other text:
               </ChipGroup>
               <AddRow id="gitk-add-allergy" label="Add another allergy" placeholder="Like strawberries or mustard" onAdd={addUnique(setAllergies)} />
               <div style={{ fontSize: 12, lineHeight: 1.5, color: C.sec }}>
-                I will never put these in a plan. Still check labels, just to be safe.
+                I'll leave these out of your meal plans. Please still check food labels, since products can change.
               </div>
             </>
           )}
@@ -864,7 +887,7 @@ Return ONLY a JSON array, no other text:
           })} />
         </Card>
 
-        <Card title="Any health goals?" sub="Optional. I'll lean your meals this way.">
+        <Card title="Any health goals?" sub="Optional. I'll favor meals that fit these.">
           <ChipGroup>
             {HEALTH_GOALS.map(g => (
               <Chip key={g} label={g} selected={healthGoals.includes(g)} onClick={() => setHealthGoals(p => toggleIn(p, g))} />
@@ -884,10 +907,16 @@ Return ONLY a JSON array, no other text:
     const customProteins = proteins.filter(p => !listed.includes(p));
     host = 'Now the good stuff. What proteins actually make it into your cart?';
     title = 'What proteins do you buy?';
-    sub = "I'll rotate these so dinner never gets boring.";
+    sub = "I'll rotate these to keep dinner interesting.";
     skip = 'Skip, use a mix';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {PROTEIN_GROUPS.some(g => g.items.some(p => blockedBy(p))) && (
+          <div style={{ fontSize: 13, lineHeight: 1.5, color: C.sec, background: C.surface, borderRadius: 12, padding: '10px 12px', display: 'flex', gap: 8 }}>
+            <i className="ti ti-lock" style={{ fontSize: 16, color: C.teal, flexShrink: 0, marginTop: 1 }} />
+            <span>Grayed-out proteins are off because of the food rules you picked. Tap Back to change them.</span>
+          </div>
+        )}
         {PROTEIN_GROUPS.map(group => (
           <div key={group.group} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <SectionLabel>{group.group}</SectionLabel>
@@ -918,12 +947,23 @@ Return ONLY a JSON array, no other text:
   if (step === 6) {
     if (!needsCode) isLast = true;
     const customTypes = mealTypes.filter(t => !MEAL_TYPES.includes(t));
-    host = 'Pick the meals that get clean plates and zero complaints.';
+    const allTypesOn = MEAL_TYPES.every(t => mealTypes.includes(t));
+    host = 'Pick the meals your family actually asks for.';
     title = 'What does your crew actually eat?';
     sub = 'Choose as many as you like.';
     skip = 'Surprise me';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <button type="button" aria-pressed={allTypesOn}
+          onClick={() => setMealTypes(p => allTypesOn ? p.filter(t => !MEAL_TYPES.includes(t)) : [...p, ...MEAL_TYPES.filter(t => !p.includes(t))])}
+          style={{
+            alignSelf: 'flex-start', minHeight: 40, padding: '0 16px', borderRadius: 20, border: `1.5px solid ${C.teal}`,
+            background: allTypesOn ? C.teal : '#fff', color: allTypesOn ? '#fff' : C.teal, fontSize: 14, fontWeight: 700,
+            fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+          <i className={allTypesOn ? 'ti ti-x' : 'ti ti-checks'} style={{ fontSize: 16 }} />
+          {allTypesOn ? 'Clear all' : 'We like them all'}
+        </button>
         <ChipGroup>
           {MEAL_TYPES.map(t => (
             <Chip key={t} label={t} selected={mealTypes.includes(t)} onClick={() => setMealTypes(p => toggleIn(p, t))} />
@@ -1000,6 +1040,24 @@ Return ONLY a JSON array, no other text:
             <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>Step {step} of {TOTAL_STEPS}</div>
           </div>
         </div>
+
+        {resumed && (
+          <div role="status" style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 8px 14px', borderRadius: 14,
+            background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.14)', color: '#fff', fontSize: 14, lineHeight: 1.4,
+          }}>
+            <span style={{ flex: 1 }}>Welcome back. I saved your answers from last time.</span>
+            <button type="button" onClick={startOver} style={{
+              minHeight: 40, padding: '0 14px', borderRadius: 20, border: 'none', background: C.gold, color: C.teal,
+              fontSize: 13, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>Start over</button>
+            <button type="button" onClick={() => setResumed(false)} aria-label="Keep my answers" style={{
+              width: 40, height: 40, border: 'none', borderRadius: 20, background: 'transparent', color: 'rgba(255,255,255,0.8)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}><i className="ti ti-x" style={{ fontSize: 16 }} /></button>
+          </div>
+        )}
 
         {/* key={step} restarts the talking animation on every new question */}
         <Host key={step} onDark text={host} />

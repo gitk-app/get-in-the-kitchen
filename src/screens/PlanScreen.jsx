@@ -764,7 +764,7 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
 
       {/* Build My Week wizard */}
       {wizard && (
-        <Sheet onClose={() => setWizard(false)} title="Build my week" subtitle="Answer 3 questions and Claude fills your whole week">
+        <Sheet onClose={() => setWizard(false)} title="Build my week" subtitle="Answer a few quick questions and Nia plans your whole week">
           <div style={{ padding: '12px 16px' }}>
             {building ? (
               <div style={{ textAlign: 'center', padding: '32px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>

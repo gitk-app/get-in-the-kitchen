@@ -99,7 +99,7 @@ export default function HomeScreen({ store, onNavigate }) {
     const hasPlan = Object.values(currentPlan).some(day => day && Object.values(day).some(Boolean));
     if (!hasPlan) {
       return {
-        text: `No plan for this week yet, ${firstName}. Want me to build one around your budget?`,
+        text: `Looks like you haven't started planning your meals for this week yet${firstName ? ', ' + firstName : ''}. I can help you build one around your budget.`,
         actions: [{ label: 'Build my week', tab: 'plan' }],
       };
     }
