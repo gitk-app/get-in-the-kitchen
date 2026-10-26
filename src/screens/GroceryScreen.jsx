@@ -276,6 +276,17 @@ const listItemMatches = (listName, receiptName) => {
   return need.length > 0 && need.every(w => have.has(w));
 };
 
+// Turns an ingredient name into a simple match key, so "Yellow onions, diced"
+// and "yellow onion" land on one line instead of two.
+const PREP_WORDS = new Set(['fresh', 'chopped', 'diced', 'minced', 'sliced', 'large', 'small', 'medium', 'whole', 'raw',
+  'cooked', 'finely', 'roughly', 'optional', 'to', 'taste', 'for', 'serving', 'divided', 'about', 'of', 'the', 'a', 'and', 'or']);
+const itemKey = (name) => String(name || '').toLowerCase()
+  .replace(/\([^)]*\)/g, ' ').replace(/[^a-z ]/g, ' ').split(/\s+/)
+  .filter(w => w && !PREP_WORDS.has(w))
+  .map(w => (w.endsWith('oes') ? w.slice(0, -2) : (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)))
+  .join(' ');
+const extraKey = (e) => 'extra|' + (e.id || e.name);
+
 // Saved grocery progress: what she checked off and removed each week, plus
 // which store she moved items to. Lives in one localStorage key.
 const PROGRESS_KEY = 'gitk_grocery_progress';
@@ -453,7 +464,7 @@ export default function GroceryScreen({ store, onNavigate }) {
     setStoreTotals({});
     // Anything checked off counts as bought and stays off this week's list
     setRemoved(prev => new Set([...prev, ...checkedNames]));
-    setExtras(prev => prev.filter(e => !checkedNames.has(e.name + '|' + e.source)));
+    setExtras(prev => prev.filter(e => !checkedNames.has(extraKey(e))));
     setCheckedNames(new Set());
     showToast(`Trip saved: $${tripTotal.toFixed(2)}. ` + tripVerdict(tripTotal));
   };
@@ -643,10 +654,10 @@ Respond ONLY with JSON, no other text:
     // Anything on the list that shows up on the receipt counts as bought
     const bought = allItems.filter(li => receipt.items.some(it => it.count && listItemMatches(li.name, it.name)));
     if (bought.length) {
-      const keys = bought.map(li => li.name + '|' + li.source);
+      const keys = bought.map(li => li.key);
       setRemoved(prev => new Set([...prev, ...keys]));
       setCheckedNames(prev => { const n = new Set(prev); keys.forEach(k => n.delete(k)); return n; });
-      setExtras(prev => prev.filter(e => !keys.includes(e.name + '|' + e.source)));
+      setExtras(prev => prev.filter(e => !keys.includes(extraKey(e))));
     }
 
     setReceipt(null);
@@ -666,27 +677,42 @@ Respond ONLY with JSON, no other text:
         const meal = meals.find(m => m.id === plan[day]?.[slot]);
         if (!meal?.items) return;
         meal.items.forEach(it => {
-          const k = it.n + '|' + (it.s || '');
-          if (!seen[k]) seen[k] = { name: it.n, store: it.s || '', source: 'plan' };
+          const name = String(it.n || '').trim();
+          if (!name) return;
+          const k = itemKey(name) || name.toLowerCase();
+          if (!seen[k]) seen[k] = { key: k + '|plan', name, store: it.s || '', source: 'plan', qtys: [], mealNames: new Set() };
+          if (!seen[k].store && it.s) seen[k].store = it.s;
+          if (it.q && !seen[k].qtys.includes(String(it.q))) seen[k].qtys.push(String(it.q));
+          seen[k].mealNames.add(meal.name);
         });
       });
     });
-    return Object.values(seen);
+    return Object.values(seen).map(({ qtys, mealNames, ...rest }) => ({
+      ...rest,
+      qty: qtys.slice(0, 3).join(' + ') + (qtys.length > 3 ? ' + more' : ''),
+      mealCount: mealNames.size,
+    }));
   }, [meals, plans, activeWeek]);
+
+  // Pantry names, so list items she already has go to "Check your kitchen first"
+  const pantryKeys = useMemo(() => new Set(pantry.map(p => itemKey(p.name)).filter(Boolean)), [pantry]);
+  const inPantry = (item) => item.source === 'plan' && (pantryKeys.has(itemKey(item.name)) || pantry.some(p => listItemMatches(p.name, item.name)));
 
   const lowPantryItems = useMemo(() => pantry
     .filter(p => { if (p.type === 'frozen') return false; return (p.type === 'fresh' || p.fresh) && Math.floor((Date.now() - p.addedAt) / 86400000) >= 3; })
-    .slice(0, 6).map(p => ({ name: p.name, store: '', source: 'pantry', qty: p.qty })), [pantry]);
+    .slice(0, 6).map(p => ({ key: (itemKey(p.name) || p.name) + '|pantry', name: p.name, store: '', source: 'pantry', qty: p.qty })), [pantry]);
 
-  const allItems = useMemo(() => [...planItems, ...lowPantryItems, ...extras]
-    .filter(item => !removed.has(item.name + '|' + item.source)), [planItems, lowPantryItems, extras, removed]);
+  const allItems = useMemo(() => [...planItems, ...lowPantryItems, ...extras.map(e => ({ ...e, key: extraKey(e) }))]
+    .filter(item => !removed.has(item.key)), [planItems, lowPantryItems, extras, removed]);
 
   const getItemStore = (item) => storeOverrides[item.name] || item.store || '';
   const getItemCategory = (item) => {
     const saved = categoryOverrides[item.name.toLowerCase()];
     // Items once moved to the old Snacks section now go to Pantry and shelf
     if (saved === 'snacks') return 'pantry';
-    return saved || guessCategory(item.name, item.store);
+    if (saved) return saved;
+    if (inPantry(item)) return 'onhand';
+    return guessCategory(item.name, item.store);
   };
 
   const byStore = useMemo(() => {
@@ -695,18 +721,36 @@ Respond ONLY with JSON, no other text:
     return g;
   }, [allItems, storeOverrides]);
 
-  const toggleCheck = (name, source) => {
-    const k = name + '|' + source;
-    setCheckedNames(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const toggleCheck = (key) => {
+    setCheckedNames(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   };
 
-  const isChecked = (name, source) => checkedNames.has(name + '|' + source);
-  const checkedCount = checkedNames.size;
-  const removeChecked = () => {
-    setRemoved(prev => new Set([...prev, ...checkedNames]));
-    setExtras(prev => prev.filter(e => !checkedNames.has(e.name + '|' + e.source)));
-    setCheckedNames(new Set());
+  const isChecked = (key) => checkedNames.has(key);
+  const checkedKeys = allItems.filter(i => checkedNames.has(i.key)).map(i => i.key);
+  const checkedCount = checkedKeys.length;
+
+  // Removes items from this week's list, with a few seconds to undo
+  const [undo, setUndo] = useState(null);
+  const undoTimer = useRef(null);
+  const removeKeys = (keys) => {
+    if (!keys.length) return;
+    const keySet = new Set(keys);
+    const goneExtras = extras.filter(e => keySet.has(extraKey(e)));
+    setRemoved(prev => new Set([...prev, ...keys]));
+    setExtras(prev => prev.filter(e => !keySet.has(extraKey(e))));
+    setCheckedNames(prev => { const n = new Set(prev); keys.forEach(k => n.delete(k)); return n; });
+    setUndo({ keys, extras: goneExtras });
+    clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndo(null), 8000);
   };
+  const undoRemove = () => {
+    if (!undo) return;
+    setRemoved(prev => { const n = new Set(prev); undo.keys.forEach(k => n.delete(k)); return n; });
+    if (undo.extras.length) setExtras(prev => [...prev, ...undo.extras]);
+    clearTimeout(undoTimer.current);
+    setUndo(null);
+  };
+  const removeChecked = () => removeKeys(checkedKeys);
 
   const addExtra = () => {
     if (!extraName.trim()) return;
@@ -715,35 +759,37 @@ Respond ONLY with JSON, no other text:
   };
 
   const renderItem = (item) => {
-    const checked = isChecked(item.name, item.source);
+    const checked = isChecked(item.key);
     const currentStore = getItemStore(item);
-    const isEditingThis = editingStore === item.name + item.source;
+    const isEditingThis = editingStore === item.key;
     const currentCat = getItemCategory(item);
-    const isEditingCat = editingCategory === item.name + item.source;
+    const isEditingCat = editingCategory === item.key;
     const ac = aisleColor(currentCat);
     return (
-      <div key={item.name + item.source} className="gitk-grocery-row" style={{ padding: '11px 14px', borderTop: '1px solid ' + ac.border + '66', background: '#fff' }}>
+      <div key={item.key} className="gitk-grocery-row" style={{ padding: '11px 14px', borderTop: '1px solid ' + ac.border + '66', background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: checked ? 0.45 : 1 }}>
-          <button type="button" onClick={() => toggleCheck(item.name, item.source)} aria-pressed={checked} aria-label={(checked ? 'Uncheck ' : 'Check off ') + item.name}
+          <button type="button" onClick={() => toggleCheck(item.key)} aria-pressed={checked} aria-label={(checked ? 'Uncheck ' : 'Check off ') + item.name}
             style={{ width: 28, height: 28, borderRadius: 14, flexShrink: 0, cursor: 'pointer', border: checked ? 'none' : '2px solid ' + ac.accent, background: checked ? ac.accent : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all .15s' }}>
             {checked && <Icon name="check" size={16} style={{ color: '#fff' }} />}
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div onClick={() => toggleCheck(item.name, item.source)} style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3, cursor: 'pointer', textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>
+            <div onClick={() => toggleCheck(item.key)} style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3, cursor: 'pointer', textDecoration: checked ? 'line-through' : 'none', color: checked ? 'var(--text-muted)' : 'var(--text)' }}>
               {item.name}
               {item.qty && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginLeft: 6 }}>{item.qty}</span>}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span onClick={() => { setEditingStore(isEditingThis ? null : item.name + item.source); setEditingCategory(null); }} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <span onClick={() => { setEditingStore(isEditingThis ? null : item.key); setEditingCategory(null); }} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <StoreLogo name={currentStore || 'No store'} size={13} />
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>▼</span>
               </span>
-              <span role="button" tabIndex={0} onClick={() => { setEditingCategory(isEditingCat ? null : item.name + item.source); setEditingStore(null); }}
+              <span role="button" tabIndex={0} onClick={() => { setEditingCategory(isEditingCat ? null : item.key); setEditingStore(null); }}
                 style={{ cursor: 'pointer', fontSize: 11, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: 'var(--surface)' }}>
                 <Icon name={CATEGORY_BY_ID[currentCat]?.icon || 'basket'} size={11} />{CATEGORY_BY_ID[currentCat]?.label || 'Other'}
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>&#9660;</span>
               </span>
               {item.source === 'pantry' && <span style={{ fontSize: 11, color: '#7A5A10', background: '#FFF1CC', borderRadius: 10, padding: '1px 8px', fontWeight: 700 }}>Running low</span>}
+              {inPantry(item) && <span style={{ fontSize: 11, color: '#7A5A10', background: '#FFF1CC', borderRadius: 10, padding: '1px 8px', fontWeight: 700 }}>In your pantry</span>}
+              {item.mealCount > 1 && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>for {item.mealCount} meals</span>}
             </div>
             {isEditingThis && (
               <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -780,6 +826,7 @@ Respond ONLY with JSON, no other text:
   const renderAisle = (group, note) => {
     const c = aisleColor(group.id);
     const left = group.items.filter(it => !isItemDone(it)).length;
+    const checkedHere = group.items.filter(it => isItemDone(it)).map(it => it.key);
     return (
       <section key={group.id} style={{ marginBottom: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + c.border, boxShadow: '0 1px 3px rgba(10,61,53,0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: c.bg, borderLeft: '5px solid ' + c.accent }}>
@@ -792,12 +839,32 @@ Respond ONLY with JSON, no other text:
           </span>
         </div>
         {note && <div style={{ fontSize: 12, color: c.text, background: c.bg, padding: '0 14px 8px 59px' }}>{note}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 14px 10px 59px', background: c.bg }}>
+          {left > 0 && (
+            <button type="button" onClick={() => setCheckedNames(prev => new Set([...prev, ...group.items.map(it => it.key)]))} style={{
+              minHeight: 36, padding: '0 12px', borderRadius: 18, border: '1.5px solid ' + c.accent, background: '#fff', color: c.text,
+              fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}><Icon name="checks" size={14} /> Check all</button>
+          )}
+          {checkedHere.length > 0 && (
+            <button type="button" onClick={() => removeKeys(checkedHere)} style={{
+              minHeight: 36, padding: '0 12px', borderRadius: 18, border: 'none', background: c.accent, color: '#fff',
+              fontSize: 13, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}><Icon name="trash" size={14} /> Remove {checkedHere.length} checked</button>
+          )}
+          {checkedHere.length > 0 && (
+            <button type="button" onClick={() => setCheckedNames(prev => { const n = new Set(prev); checkedHere.forEach(k => n.delete(k)); return n; })} style={{
+              minHeight: 36, padding: '0 8px', border: 'none', background: 'transparent', color: c.text,
+              fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+            }}>Uncheck</button>
+          )}
+        </div>
         {group.items.map(item => renderItem(item))}
       </section>
     );
   };
 
-  const isItemDone = (item) => isChecked(item.name, item.source);
+  const isItemDone = (item) => isChecked(item.key);
 
   return (
     <div className="screen">
@@ -950,12 +1017,6 @@ Respond ONLY with JSON, no other text:
                 </Host>
               </div>
             )}
-            {checkedCount > 0 && (
-              <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                <button onClick={removeChecked} style={{ background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>✓ Remove {checkedCount} purchased item{checkedCount > 1 ? 's' : ''}</button>
-                <button onClick={() => setCheckedNames(new Set())} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>Just uncheck all</button>
-              </div>
-            )}
           </div>
         )}
 
@@ -987,6 +1048,31 @@ Respond ONLY with JSON, no other text:
           </div>
         )}
       </div>
+
+      {/* Remove bar: stays on screen while items are checked, then offers undo */}
+      {(checkedCount > 0 || undo) && <div style={{ height: 90 }} aria-hidden="true" />}
+      {(checkedCount > 0 || undo) && (
+        <div className="gitk-remove-bar" role="region" aria-label="Checked items">
+          <style>{`
+            .gitk-remove-bar { position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-height, 64px) + 10px); z-index: 120; display: flex; justify-content: center; }
+            @media (min-width: 768px) { .gitk-remove-bar { left: calc(var(--sidebar-width, 240px) + 16px); right: 16px; bottom: 16px; } }
+          `}</style>
+          <div style={{ width: '100%', maxWidth: 560, background: '#0A3D35', color: '#fff', borderRadius: 16, padding: '10px 10px 10px 16px', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
+            {checkedCount > 0 ? (
+              <>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{checkedCount} checked</span>
+                <button type="button" onClick={() => setCheckedNames(new Set())} style={{ minHeight: 40, padding: '0 10px', border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>Uncheck all</button>
+                <button type="button" onClick={removeChecked} style={{ minHeight: 40, padding: '0 14px', borderRadius: 12, border: 'none', background: '#C9A84C', color: '#0A3D35', fontSize: 14, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' }}>Remove {checkedCount}</button>
+              </>
+            ) : (
+              <>
+                <span style={{ flex: 1, fontSize: 14 }}>Removed {undo.keys.length} item{undo.keys.length !== 1 ? 's' : ''}.</span>
+                <button type="button" onClick={undoRemove} style={{ minHeight: 40, padding: '0 14px', borderRadius: 12, border: 'none', background: '#C9A84C', color: '#0A3D35', fontSize: 14, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>Undo</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Settings sheet */}
       {toast && <HostToast text={toast} onClose={hideToast} />}
