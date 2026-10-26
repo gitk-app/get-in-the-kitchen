@@ -362,6 +362,9 @@ export default function GroceryScreen({ store, onNavigate }) {
   const [extraName, setExtraName] = useState('');
   const [extraStore, setExtraStore] = useState('');
   const [addingExtra, setAddingExtra] = useState(false);
+  const [extraQty, setExtraQty] = useState('');
+  const [addNote, setAddNote] = useState('');
+  const addInputRef = useRef(null);
   const [storeOverrides, setStoreOverrides] = useState(() => readProgress().stores);
   // Category changes she makes are remembered on this device
   const [categoryOverrides, setCategoryOverrides] = useState(() => {
@@ -752,10 +755,22 @@ Respond ONLY with JSON, no other text:
   };
   const removeChecked = () => removeKeys(checkedKeys);
 
+  // Adds her own item to this week's list. It lands in the right aisle automatically.
   const addExtra = () => {
-    if (!extraName.trim()) return;
-    setExtras(prev => [...prev, { name: extraName.trim(), store: extraStore || '', source: 'extra', id: Date.now() }]);
-    setExtraName(''); setExtraStore(''); setAddingExtra(false);
+    const name = extraName.trim();
+    if (!name) { addInputRef.current?.focus(); return; }
+    const already = allItems.find(it => itemKey(it.name) === itemKey(name));
+    if (already) {
+      setAddNote(`${already.name} is already on your list.`);
+    } else {
+      const item = { name, qty: extraQty.trim(), store: extraStore || '', source: 'extra', id: Date.now() };
+      setExtras(prev => [...prev, item]);
+      const aisle = CATEGORY_BY_ID[categoryOverrides[name.toLowerCase()] || guessCategory(name, extraStore)]?.label || 'Other';
+      setAddNote(`Added ${name} to ${aisle}.`);
+    }
+    setExtraName(''); setExtraQty('');
+    addInputRef.current?.focus();
+    setTimeout(() => setAddNote(''), 3500);
   };
 
   const renderItem = (item) => {
@@ -975,6 +990,33 @@ Respond ONLY with JSON, no other text:
           )}
         </div>
 
+        {/* Add your own item: always at the top so it's easy to find */}
+        <div className="card mb-12" style={{ padding: 12 }}>
+          <label htmlFor="grocery-add" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 8, display: 'block' }}>Add to your list</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input id="grocery-add" ref={addInputRef} value={extraName} onChange={e => setExtraName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addExtra(); }}
+              placeholder="Like milk or paper towels" autoComplete="off"
+              style={{ flex: '1 1 160px', minWidth: 0, height: 44, fontSize: 16 }} />
+            <label htmlFor="grocery-add-qty" style={{ position: 'absolute', left: -9999 }}>How much (optional)</label>
+            <input id="grocery-add-qty" value={extraQty} onChange={e => setExtraQty(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addExtra(); }}
+              placeholder="How much" autoComplete="off"
+              style={{ flex: '0 1 96px', minWidth: 0, height: 44, fontSize: 16 }} />
+            <label htmlFor="grocery-add-store" style={{ position: 'absolute', left: -9999 }}>Store (optional)</label>
+            <select id="grocery-add-store" value={extraStore} onChange={e => setExtraStore(e.target.value)}
+              style={{ flex: '0 1 130px', minWidth: 0, height: 44, fontSize: 15 }}>
+              <option value="">Any store</option>
+              {userStores.concat(['Other']).map(st => <option key={st} value={st}>{st}</option>)}
+            </select>
+            <button type="button" onClick={addExtra} style={{
+              height: 44, padding: '0 18px', borderRadius: 10, border: 'none', background: 'var(--teal)', color: '#fff',
+              fontSize: 15, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}><Icon name="plus" size={16} /> Add</button>
+          </div>
+          {addNote && <div role="status" style={{ fontSize: 13, color: 'var(--teal)', fontWeight: 600, marginTop: 8 }}>{addNote}</div>}
+        </div>
+
         {/* View tabs */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
           <button onClick={() => setView('all')} style={{ flex: 1, padding: 9, borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: view === 'all' ? 'var(--teal)' : 'var(--surface)', color: view === 'all' ? '#C9A84C' : 'var(--text-secondary)' }}>All items ({allItems.length})</button>
@@ -988,32 +1030,11 @@ Respond ONLY with JSON, no other text:
               {groupByCategory(allItems, getItemCategory, isItemDone).map(group =>
                 renderAisle(group, group.id === 'onhand' ? 'You may already have these. Check before you buy.' : null))}
             </div>
-            <div className="mb-16" style={{ marginTop: 24, paddingTop: 16, borderTop: '0.5px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <SectionLabel>Need something else?</SectionLabel>
-                <button onClick={() => setAddingExtra(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={14} /> Add item</button>
-              </div>
-              {!addingExtra && (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 0' }}>Add anything not on your meal plan. It lands in the right aisle automatically.</div>
-              )}
-              {addingExtra && (
-                <div className="card-flat" style={{ marginTop: 8, padding: 12 }}>
-                  <div className="form-group"><input value={extraName} onChange={e => setExtraName(e.target.value)} placeholder="Item name" autoFocus onKeyDown={e => e.key === 'Enter' && addExtra()} /></div>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Store (optional)</label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {userStores.concat(['Other']).map(s => { const sc = getStoreColor(s); const sel = extraStore === s; return <div key={s} onClick={() => setExtraStore(sel ? '' : s)} style={{ padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: sel ? 700 : 400, border: '1.5px solid ' + (sel ? sc.label : sc.border), background: sel ? sc.bg : 'var(--bg-white)', color: sel ? sc.label : 'var(--text-secondary)' }}>{s}</div>; })}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}><Button variant="primary" onClick={addExtra} style={{ flex: 1 }}>Add</Button><Button variant="ghost" onClick={() => { setAddingExtra(false); setExtraName(''); setExtraStore(''); }} style={{ flex: 1 }}>Cancel</Button></div>
-                </div>
-              )}
-            </div>
             {allItems.length === 0 && (
               <div style={{ padding: '20px 0' }}>
                 <Host text={`Your list is empty${firstName ? ', ' + firstName : ''}. Plan your week and I'll fill it in with everything you need, sorted by aisle.`}>
                   {typeof onNavigate === 'function' && <HostAction onClick={() => onNavigate('plan')}>Plan my week</HostAction>}
-                  <HostAction secondary onClick={() => setAddingExtra(true)}>Add an item</HostAction>
+                  <HostAction secondary onClick={() => addInputRef.current?.focus()}>Add an item</HostAction>
                 </Host>
               </div>
             )}
