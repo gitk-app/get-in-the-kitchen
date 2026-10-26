@@ -164,6 +164,17 @@ export default function SettingsScreen({ store }) {
   const [codeStatus, setCodeStatus] = useState(''); // '' | checking | saved | error | offline
   const [newStore, setNewStore] = useState('');
   const [editSheet, setEditSheet] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  // Clears everything saved on this phone and starts setup over.
+  // Keeps the tester code so smart features stay on.
+  const resetAllData = () => {
+    try {
+      const keep = new Set(['gitk_beta_code', 'gitk_api_key', 'gitk_unsplash_key']);
+      Object.keys(localStorage).filter(k => k.startsWith('gitk_') && !keep.has(k)).forEach(k => localStorage.removeItem(k));
+    } catch (e) { /* ignore */ }
+    window.location.reload();
+  };
   const [nameDraft, setNameDraft] = useState(''); // household | foodrules | stores | budget | proteins | mealtypes
 
   // Bring older saved settings into the new format, once
@@ -355,6 +366,26 @@ export default function SettingsScreen({ store }) {
               <Button variant="primary" onClick={saveCode}>
                 {codeStatus === 'checking' ? 'Checking...' : 'Save code'}
               </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Start fresh */}
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.04em', marginBottom: 10 }}>Start fresh</div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Reset all data</div>
+          <p className="text-sm mb-12">Clears your meals, plans, pantry, grocery list, and trip history on this phone, then starts setup over. Your tester code stays saved.</p>
+          {!confirmReset ? (
+            <Button variant="ghost" onClick={() => setConfirmReset(true)}>
+              <Icon name="refresh" size={15} /> Reset all data
+            </Button>
+          ) : (
+            <div role="alertdialog" aria-label="Reset all data" style={{ border: '1px solid var(--danger)', borderRadius: 12, padding: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Are you sure? This can't be undone.</div>
+              <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+                <Button variant="danger" onClick={resetAllData}>Yes, reset everything</Button>
+                <Button variant="ghost" onClick={() => setConfirmReset(false)}>Cancel</Button>
+              </div>
             </div>
           )}
         </div>
