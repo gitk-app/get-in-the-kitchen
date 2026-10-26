@@ -240,7 +240,11 @@ export const ALLERGENS = ['Peanuts', 'Tree nuts', 'Shellfish', 'Fish', 'Eggs', '
 
 export const HOUSE_RULES = ['We eat everything', 'Vegetarian', 'Vegan', 'Seafood, no meat', 'No pork', 'No red meat', 'Halal', 'Kosher'];
 
-export const HEALTH_GOALS = ['Low sodium', 'Watching sugar', 'Lower carb', 'Heart healthy'];
+// Health goals come in two parts: things to limit, and what food choices should support.
+// Both are a gentle lean in every AI prompt, not a hard rule.
+export const NUTRIENT_LIMITS = ['Low sodium', 'Watching sugar', 'Lower carb', 'Less fried food', 'Less red meat'];
+export const HEALTH_SUPPORTS = ['Heart healthy', 'More protein', 'More fiber', 'More fruits and veggies', 'Steady energy'];
+export const HEALTH_GOALS = [...NUTRIENT_LIMITS, ...HEALTH_SUPPORTS];
 
 export const MEAL_TYPES = [
   'Tacos and bowls', 'Pasta', 'Sheet pan dinners', 'Soups and stews', 'Breakfast for dinner',

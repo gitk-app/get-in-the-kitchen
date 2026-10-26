@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Host, HostAvatar as Avatar, HOST_NAME } from '../components/Host';
 import {
-  STORES, STORE_SUGGESTIONS, SEED_MEALS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, MEAL_TYPES,
+  STORES, STORE_SUGGESTIONS, SEED_MEALS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, NUTRIENT_LIMITS, HEALTH_SUPPORTS, MEAL_TYPES,
   HOUSEHOLD_OPTIONS as HOUSEHOLD, SHOP_FREQ_OPTIONS as FREQ_OPTIONS,
   PROTEIN_OPTIONS as PROTEIN_GROUPS, getBlockedReason,
 } from '../data/meals';
@@ -124,9 +124,10 @@ const STEP_PHOTOS = {
   2: 'bg-onb-table.jpg',
   3: 'bg-grocery.jpg',
   4: 'bg-onb-ingredients.jpg',
-  5: 'bg-onb-ingredients.jpg',
-  6: 'bg-onb-cooking.jpg',
+  5: 'bg-onb-table.jpg',
+  6: 'bg-onb-ingredients.jpg',
   7: 'bg-onb-cooking.jpg',
+  8: 'bg-onb-cooking.jpg',
 };
 
 // A full-screen photo that stays put while the page scrolls, with a teal wash so text reads clearly
@@ -284,7 +285,7 @@ export default function OnboardingScreen({ store, onNavigate }) {
   const { setOnboarded, setPrefs, setBudget, apiFetch, setMeals, betaCode, setBetaCode, checkBetaCode } = store;
   // Testers who opened an invite link already have a code, so they skip the code step
   const needsCode = useRef(!betaCode && !localStorage.getItem('gitk_api_key')).current;
-  const TOTAL_STEPS = needsCode ? 7 : 6;
+  const TOTAL_STEPS = needsCode ? 8 : 7;
   const draft = useRef(loadDraft()).current;
 
   const [step, setStep] = useState(draft.step || 0);
@@ -400,7 +401,7 @@ export default function OnboardingScreen({ store, onNavigate }) {
   // ----- Finish: save prefs, build starter library -----
   const finish = async (skipCode = false) => {
     // Check the access code first, if she typed one
-    if (step === 7 && !skipCode && codeInput.trim()) {
+    if (step === 8 && !skipCode && codeInput.trim()) {
       setCheckingCode(true);
       setCodeError('');
       const result = await checkBetaCode(codeInput);
@@ -735,8 +736,8 @@ Return ONLY a JSON array, no other text:
 
   if (step === 2) {
     host = "No judgment here. Real budgets get real plans, and I'll keep you inside yours.";
-    title = "What's the grocery budget looking like?";
-    sub = 'Your monthly amount for food at home.';
+    title = 'How much do you spend on groceries each month?';
+    sub = 'Just food you buy to cook at home. Leave out eating out and takeout.';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -841,10 +842,9 @@ Return ONLY a JSON array, no other text:
   if (step === 4) {
     const customAllergies = allergies.filter(a => !ALLERGENS.includes(a));
     const customRules = houseRules.filter(r => !HOUSE_RULES.includes(r));
-    const customGoals = healthGoals.filter(g => !HEALTH_GOALS.includes(g));
     host = "Tell me what's off the table once, and I'll plan around it.";
     title = 'Anything off the table?';
-    sub = "Three quick ones. Skip whatever doesn't apply.";
+    sub = "Two quick ones. Skip whatever doesn't apply.";
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Card title="Any food allergies?" sub="Anything someone in your house can't eat, even a little.">
@@ -895,22 +895,44 @@ Return ONLY a JSON array, no other text:
           })} />
         </Card>
 
-        <Card title="Any health goals?" sub="Optional. I'll favor meals that fit these.">
+      </div>
+    );
+  }
+
+  if (step === 5) {
+    const customGoals = healthGoals.filter(g => !HEALTH_GOALS.includes(g));
+    host = "Optional, but it helps me pick meals that fit how you want to eat.";
+    title = 'Any health goals?';
+    sub = "Pick any that fit. I'll favor meals that match, without making them strict rules.";
+    skip = 'Skip this one';
+    body = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Card title="What do you want to limit or adjust?" sub="Things to have less of.">
           <ChipGroup>
-            {HEALTH_GOALS.map(g => (
+            {NUTRIENT_LIMITS.map(g => (
+              <Chip key={g} label={g} selected={healthGoals.includes(g)} onClick={() => setHealthGoals(p => toggleIn(p, g))} />
+            ))}
+          </ChipGroup>
+        </Card>
+        <Card title="What do you want your food choices to support?" sub="Things to have more of.">
+          <ChipGroup>
+            {HEALTH_SUPPORTS.map(g => (
               <Chip key={g} label={g} selected={healthGoals.includes(g)} onClick={() => setHealthGoals(p => toggleIn(p, g))} />
             ))}
             {customGoals.map(g => (
               <Chip key={g} label={g} selected onClick={() => setHealthGoals(p => p.filter(x => x !== g))} />
             ))}
           </ChipGroup>
-          <AddRow id="gitk-add-goal" label="Add your own" placeholder="Like more fiber or more protein" onAdd={addUnique(setHealthGoals)} />
+          <AddRow id="gitk-add-goal" label="Add your own" placeholder="Like more iron or fewer processed foods" onAdd={addUnique(setHealthGoals)} />
         </Card>
+        <div style={{ fontSize: 12, lineHeight: 1.5, color: C.sec }}>
+          These are general food preferences, not medical advice. For a medical diet, follow your doctor's guidance.
+        </div>
       </div>
     );
   }
 
-  if (step === 5) {
+  if (step === 6) {
     const listed = PROTEIN_GROUPS.flatMap(g => g.items);
     const customProteins = proteins.filter(p => !listed.includes(p));
     host = 'Now the good stuff. What proteins actually make it into your cart?';
@@ -952,7 +974,7 @@ Return ONLY a JSON array, no other text:
     );
   }
 
-  if (step === 6) {
+  if (step === 7) {
     if (!needsCode) isLast = true;
     const customTypes = mealTypes.filter(t => !MEAL_TYPES.includes(t));
     const allTypesOn = MEAL_TYPES.every(t => mealTypes.includes(t));
@@ -985,7 +1007,7 @@ Return ONLY a JSON array, no other text:
     );
   }
 
-  if (step === 7) {
+  if (step === 8) {
     isLast = true;
     host = "You're one of my first testers! Pop in the code I sent you and I'll turn on the smart stuff.";
     title = 'Your tester code';

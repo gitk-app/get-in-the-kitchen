@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Icon, Button, Divider, Pill } from '../components/UI';
 import {
-  STORES, STORE_SUGGESTIONS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, MEAL_TYPES,
+  STORES, STORE_SUGGESTIONS, ALLERGENS, HOUSE_RULES, HEALTH_GOALS, NUTRIENT_LIMITS, HEALTH_SUPPORTS, MEAL_TYPES,
   HOUSEHOLD_OPTIONS as HOUSEHOLD, SHOP_FREQ_OPTIONS as FREQ_OPTIONS,
   PROTEIN_OPTIONS as PROTEIN_GROUPS, getBlockedReason,
 } from '../data/meals';
@@ -413,12 +413,19 @@ export default function SettingsScreen({ store }) {
             <AddRow placeholder="Like no spicy food or no mushrooms" onAdd={addRule} />
           </RuleCard>
 
-          <RuleCard title="Health goals" sub="Optional. Meals lean this way.">
+          <RuleCard title="What do you want to limit or adjust?" sub="Optional. I'll favor meals with less of these.">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {HEALTH_GOALS.map(g => <Pill key={g} selected={healthGoals.includes(g)} onClick={() => toggleGoal(g)}>{g}</Pill>)}
+              {NUTRIENT_LIMITS.map(g => <Pill key={g} selected={healthGoals.includes(g)} onClick={() => toggleGoal(g)}>{g}</Pill>)}
+            </div>
+          </RuleCard>
+
+          <RuleCard title="What do you want your food choices to support?" sub="Optional. I'll favor meals with more of these.">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {HEALTH_SUPPORTS.map(g => <Pill key={g} selected={healthGoals.includes(g)} onClick={() => toggleGoal(g)}>{g}</Pill>)}
               {customGoals.map(g => <RemovableChip key={g} label={g} onRemove={() => toggleGoal(g)} />)}
             </div>
-            <AddRow placeholder="Like more fiber or more protein" onAdd={addGoal} />
+            <AddRow placeholder="Like more iron or fewer processed foods" onAdd={addGoal} />
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>These are general food preferences, not medical advice.</div>
           </RuleCard>
 
           <Button variant="primary" onClick={() => setEditSheet(null)}>Done</Button>
