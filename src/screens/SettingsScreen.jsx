@@ -275,8 +275,14 @@ export default function SettingsScreen({ store }) {
 
   return (
     <div className="screen">
-      {/* Teal hero header */}
-      <div style={{ background: '#0A3D35', padding: '20px 24px 24px' }}>
+      <style>{`
+        .stt-settings-bg { background: linear-gradient(180deg, rgba(10,61,53,0.7) 0%, rgba(10,61,53,0.5) 50%, rgba(10,61,53,0.88) 100%), url('/bg-settings.jpg') center bottom / cover no-repeat, #0A3D35; }
+        @media (min-width: 768px) {
+          .stt-settings-bg { background: linear-gradient(90deg, rgba(10,61,53,0.45) 0%, rgba(10,61,53,0.7) 45%, rgba(10,61,53,0.9) 100%), url('/bg-settings-wide.jpg') left center / cover no-repeat, #0A3D35; }
+        }
+      `}</style>
+      {/* Photo hero header */}
+      <div className="stt-settings-bg" style={{ padding: '20px 24px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <div>
             <img src="/logo.svg" alt="Get Cooking with Nia" style={{ height: 64, width: 'auto', display: 'block' }} />
@@ -284,17 +290,17 @@ export default function SettingsScreen({ store }) {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>Monthly budget</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>${monthlyBudget}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>${perTrip} a trip</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>Household</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>{HOUSEHOLD.find(h => h.value === prefs?.householdSize)?.num || '2'}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>people</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>Stores</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#C9A84C', lineHeight: 1 }}>{prefs?.stores?.length || 0}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prefs?.stores?.slice(0, 2).join(', ') || 'None set'}</div>

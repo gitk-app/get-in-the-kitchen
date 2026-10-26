@@ -245,14 +245,18 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"
   return (
     <div className="screen">
       <style>{LIB_STYLES}</style>
-      <div className="screen-header">
-        <span className="screen-title" style={{ whiteSpace: 'nowrap' }}>Meal library</span>
+      <style>{`.stt-library-bg { background: linear-gradient(90deg, rgba(10,61,53,0.92) 0%, rgba(10,61,53,0.7) 55%, rgba(10,61,53,0.35) 100%), url('/bg-library.jpg') center / cover no-repeat, #0A3D35; }`}</style>
+      <div className="stt-library-bg" style={{ minHeight: 120, padding: '22px 24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>MEAL LIBRARY</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>Your family's favorites</div>
+        </div>
         <button type="button" onClick={() => setAdding(true)} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', borderRadius: 10,
-          border: 'none', background: 'var(--teal)', color: '#fff', fontSize: 14, fontWeight: 700,
-          fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', gap: 6, height: 44, padding: '0 18px', borderRadius: 22,
+          border: 'none', background: '#C9A84C', color: '#0A3D35', fontSize: 14, fontWeight: 800,
+          fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
         }}>
-          <Icon name="plus" size={15} style={{ color: 'var(--gold)' }} /> Add meal
+          <Icon name="plus" size={15} /> Add meal
         </button>
       </div>
       <div className="screen-padded">

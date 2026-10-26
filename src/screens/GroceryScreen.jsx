@@ -801,8 +801,14 @@ Respond ONLY with JSON, no other text:
 
   return (
     <div className="screen">
-      {/* ── TEAL HERO ── */}
-      <div style={{ background: '#0A3D35', padding: '0 24px 20px' }}>
+      <style>{`
+        .stt-grocery-bg { background: linear-gradient(180deg, rgba(10,61,53,0.72) 0%, rgba(10,61,53,0.5) 50%, rgba(10,61,53,0.88) 100%), url('/bg-grocery.jpg') center bottom / cover no-repeat, #0A3D35; }
+        @media (min-width: 768px) {
+          .stt-grocery-bg { background: linear-gradient(90deg, rgba(10,61,53,0.9) 0%, rgba(10,61,53,0.7) 55%, rgba(10,61,53,0.45) 100%), url('/bg-grocery-wide.jpg') right center / cover no-repeat, #0A3D35; }
+        }
+      `}</style>
+      {/* Photo hero */}
+      <div className="stt-grocery-bg" style={{ padding: '0 24px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>GROCERY LIST</div>
           <div style={{ display: 'flex', gap: 12 }}>
@@ -813,7 +819,7 @@ Respond ONLY with JSON, no other text:
 
         {/* Two stat tiles */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Monthly budget</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: currentMonthOver ? '#ef4444' : '#C9A84C', lineHeight: 1 }}>${monthlyBudget}</div>
             <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>{trips} trips · ${perTripBudget}/trip</div>
@@ -824,7 +830,7 @@ Respond ONLY with JSON, no other text:
               {currentMonthOver ? `$${(currentMonthSpent - monthlyBudget).toFixed(0)} over` : `$${currentMonthRemaining.toFixed(0)} remaining`}
             </div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(10,61,53,0.62)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>This trip</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: tripOver ? '#ef4444' : '#C9A84C', lineHeight: 1 }}>${tripTotal.toFixed(2)}</div>
             <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>of ${perTripBudget} budget</div>
@@ -838,7 +844,7 @@ Respond ONLY with JSON, no other text:
         </div>
 
         {/* YTD strip */}
-        <div style={{ background: 'rgba(201,168,76,0.12)', border: '0.5px solid rgba(201,168,76,0.3)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ background: 'rgba(10,61,53,0.7)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '0.5px solid rgba(201,168,76,0.45)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 9, fontWeight: 700, color: '#C9A84C', textTransform: 'uppercase', letterSpacing: '.06em' }}>{currentYear} Year to date</div>
             <div style={{ fontSize: 9, color: 'rgba(201,168,76,0.6)', marginTop: 2 }}>{ytdTrips.length} trip{ytdTrips.length !== 1 ? 's' : ''} · resets Jan 1</div>

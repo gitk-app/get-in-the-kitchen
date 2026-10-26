@@ -1,4 +1,4 @@
-// GET IN THE KITCHEN - PlanScreen v2.2 (food safety rules)
+// Get Cooking with Nia - PlanScreen v2.3 (photo banner)
 import React, { useState, useCallback } from 'react';
 import { Icon, Sheet, Button, Banner, BudgetBar, Pill, SectionLabel, EmptyState, StepNumber } from '../components/UI';
 import { Host, HostAction, HostAvatar, HostToast, useHostToast } from '../components/Host';
@@ -442,6 +442,13 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
 
   return (
     <div className="screen">
+      {/* Photo banner */}
+      <style>{`.stt-plan-bg { background: linear-gradient(90deg, rgba(10,61,53,0.92) 0%, rgba(10,61,53,0.7) 55%, rgba(10,61,53,0.35) 100%), url('/bg-plan.jpg') center / cover no-repeat, #0A3D35; }`}</style>
+      <div className="stt-plan-bg" style={{ minHeight: 120, padding: '22px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#C9A84C', letterSpacing: '.06em' }}>MEAL PLAN</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>Your week of meals</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>Breakfast, lunch, and dinner, planned around your budget</div>
+      </div>
       {/* Week selector */}
       <div style={{ padding: '12px 16px 0', display: 'flex', gap: 6 }}>
         {[0, 1, 2, 3].map(w => (
