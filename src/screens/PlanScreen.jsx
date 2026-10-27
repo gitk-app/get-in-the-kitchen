@@ -165,18 +165,18 @@ export default function PlanScreen({ store }) {
   const [stepsStatus, setStepsStatus] = useState({}); // mealId -> 'loading' | 'error'
   const [wizard, setWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
-  const [wizardProteins, setWizardProteins] = useState(() => prefs?.proteins || []);
-  // Build My Week answers. The usual ones are remembered in prefs for next time.
-  const [busyDays, setBusyDays] = useState(() => prefs?.busyDays || ['Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-  const [cookTools, setCookTools] = useState(() => prefs?.cookTools || []);
-  const [likesLeftovers, setLikesLeftovers] = useState(() => prefs?.likesLeftovers ?? true);
-  const [leftoverDays, setLeftoverDays] = useState(() => prefs?.leftoverDays || ['Thursday']);
+  // Every Build My Week choice starts unchecked, so she picks fresh each week
+  const [wizardProteins, setWizardProteins] = useState([]);
+  const [busyDays, setBusyDays] = useState([]);
+  const [cookTools, setCookTools] = useState([]);
+  const [likesLeftovers, setLikesLeftovers] = useState(null); // null = she didn't say
+  const [leftoverDays, setLeftoverDays] = useState([]);
   const [eatOutDays, setEatOutDays] = useState([]);
   const [wizardLocked, setWizardLocked] = useState('');
   // How much of the week's grocery budget to plan for (percent). Remembered for next time.
   const [budgetUse, setBudgetUse] = useState(() => prefs?.budgetUse || 80);
   // How much of the week comes from her saved meals: favorites, mix, or new
-  const [libraryMix, setLibraryMix] = useState(() => prefs?.libraryMix || 'mix');
+  const [libraryMix, setLibraryMix] = useState(null); // null = a mix
   const [building, setBuilding] = useState(false);
   const [toast, showToast, hideToast] = useHostToast(9000);
   const firstName = String(prefs?.userName || '').trim().split(/\s+/)[0] || '';
@@ -313,11 +313,11 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"
     // so the cost target covers only the meals being planned.
     const plannedSlots = 21 - eatOutDays.length;
     const targetCost = Math.round(weeklyBudget * budgetUse / 100 * plannedSlots / 21);
-    store.setPrefs(p => ({ ...p, budgetUse, libraryMix, busyDays, cookTools, likesLeftovers, leftoverDays }));
+    store.setPrefs(p => ({ ...p, budgetUse }));
     const inWeekOrder = (list) => DAYS.filter(d => list.includes(d));
     const busyStr = busyDays.length ? inWeekOrder(busyDays).join(', ') : 'none this week';
     const toolsStr = cookTools.length ? cookTools.join(', ') : 'none listed';
-    const leftoverStr = likesLeftovers
+    const leftoverStr = likesLeftovers !== false
       ? (leftoverDays.length ? `Leftover dinners on ${inWeekOrder(leftoverDays).join(', ')}. Leftovers from dinner can also cover next-day lunches.` : 'Leftovers are welcome where they fit, including next-day lunches.')
       : 'This household does NOT like leftovers. Do not serve the same dish twice. A protein cooked in bulk may come back only as a clearly different meal (like roast chicken one night, chicken tacos another).';
     const eatOutStr = eatOutDays.length
@@ -327,7 +327,7 @@ Respond ONLY with JSON, no other text: {"prepTime":20,"cost":8.5,"items":[{"q":"
       favorites: 'Use my saved library for about two thirds of the meals, favorites first, and create new meals for the rest. Reusing meals from my other weeks is fine.',
       mix: 'Use my saved library for about half the meals, especially favorites, and create new meals for the rest. Bring variety across weeks: use at most 5 meals from MEALS FROM MY OTHER WEEKS, and include at least 6 meals that are new to me.',
       newideas: 'Use my saved library for only about a quarter of the meals, and create new meals for the rest. Bring lots of variety: use at most 3 meals from MEALS FROM MY OTHER WEEKS.',
-    }[libraryMix] || '';
+    }[libraryMix || 'mix'] || '';
     const safetyBlock = [
       diet.guard,
       skipProteins.length ? `PROTEINS NOT PICKED THIS WEEK (do not use): ${skipProteins.join(', ')}.` : '',
@@ -887,10 +887,10 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                   <h3 style={{ marginBottom: 4 }}>3. How do you feel about leftovers?</h3>
                   <p className="text-sm mb-12">Some families love them, some don't. Either way works.</p>
                   <div className="pill-group">
-                    <Pill selected={likesLeftovers} onClick={() => setLikesLeftovers(true)}>Leftovers are fine</Pill>
-                    <Pill selected={!likesLeftovers} onClick={() => setLikesLeftovers(false)}>No leftovers, please</Pill>
+                    <Pill selected={likesLeftovers === true} onClick={() => setLikesLeftovers(likesLeftovers === true ? null : true)}>Leftovers are fine</Pill>
+                    <Pill selected={likesLeftovers === false} onClick={() => setLikesLeftovers(likesLeftovers === false ? null : false)}>No leftovers, please</Pill>
                   </div>
-                  {likesLeftovers && (
+                  {likesLeftovers === true && (
                     <>
                       <p className="text-sm" style={{ margin: '14px 0 8px', fontWeight: 600, color: 'var(--text)' }}>Which nights should be leftover nights?</p>
                       <DayPills value={leftoverDays} onChange={setLeftoverDays} />
@@ -937,7 +937,7 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                 <div className="divider" />
                 <div className="mb-16">
                   <h3 style={{ marginBottom: 4 }}>7. Favorites or new ideas?</h3>
-                  <p className="text-sm mb-12">Choose how much of the week comes from meals you've already saved.</p>
+                  <p className="text-sm mb-12">Choose how much of the week comes from meals you've already saved. If you skip this, I'll do a mix.</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
                       { v: 'favorites', l: 'Mostly my favorites', d: 'Meals you already know and like' },
@@ -946,7 +946,7 @@ Revise it so the week adds up close to $${targetCost}. Keep the same rules, batc
                     ].map(o => {
                       const sel = libraryMix === o.v;
                       return (
-                        <button key={o.v} type="button" aria-pressed={sel} onClick={() => setLibraryMix(o.v)} style={{
+                        <button key={o.v} type="button" aria-pressed={sel} onClick={() => setLibraryMix(sel ? null : o.v)} style={{
                           textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
                           border: sel ? '2px solid var(--teal)' : '1px solid var(--border)', background: sel ? 'var(--teal-light)' : 'var(--bg-white)',
                           display: 'flex', alignItems: 'center', gap: 10,
